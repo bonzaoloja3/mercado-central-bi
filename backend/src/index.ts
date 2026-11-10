@@ -1,3 +1,4 @@
+
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
@@ -38,6 +39,7 @@ type Job = {
 };
 
 const QUEUE_KEY = 'mcbi:agent:queue';
+
 const STORES = [
   { id: 1, name: 'Loja 1' },
   { id: 2, name: 'Loja 2' },
@@ -48,8 +50,11 @@ const round = (n: number) => Math.round(n * 100) / 100;
 
 function validDate(v: unknown) {
   if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+
   const d = new Date(`${v}T12:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+
+  return !Number.isNaN(d.getTime()) &&
+    d.toISOString().slice(0, 10) === v;
 }
 
 function getFilters(q: any): Filters {
@@ -85,7 +90,10 @@ function resultKey(id: string) {
 
 function authorized(req: Request, res: Response) {
   if (!AGENT_TOKEN || req.header('x-agent-token') !== AGENT_TOKEN) {
-    res.status(401).json({ error: 'Token do agente inválido.' });
+    res.status(401).json({
+      error: 'Token do agente inválido.'
+    });
+
     return false;
   }
 
@@ -101,10 +109,14 @@ async function getCache(key: string) {
 }
 
 async function setCache(key: string, value: any) {
-  await redis.set(key, {
-    value,
-    updatedAt: new Date().toISOString()
-  }, { ex: CACHE_TTL });
+  await redis.set(
+    key,
+    {
+      value,
+      updatedAt: new Date().toISOString()
+    },
+    { ex: CACHE_TTL }
+  );
 }
 
 // ======================================================
@@ -120,10 +132,19 @@ async function enqueue(job: Omit<Job, 'id' | 'createdAt'>) {
     createdAt: Date.now()
   };
 
-  await redis.set(jobKey(id), {
-    status: 'queued',
-    createdAt: completeJob.createdAt
-  }, { ex: JOB_TTL });
+  await redis.set(
+    jobKey(id),
+    {
+      status: 'queued',
+      createdAt: completeJob.createdAt,
+      type: completeJob.type,
+      filters: completeJob.filters,
+      storeId: completeJob.storeId,
+      documentId: completeJob.documentId,
+      date: completeJob.date
+    },
+    { ex: JOB_TTL }
+  );
 
   await redis.lpush(QUEUE_KEY, JSON.stringify(completeJob));
 
@@ -149,7 +170,14 @@ function demoDashboard(f: Filters) {
   );
 
   const storeFactor = f.store === '0' ? 3 : 1;
-  const filterFactor = f.product ? 0.18 : f.group ? 0.46 : f.payment ? 0.22 : 1;
+
+  const filterFactor = f.product
+    ? 0.18
+    : f.group
+      ? 0.46
+      : f.payment
+        ? 0.22
+        : 1;
 
   for (let i = 0; i < count; i++) {
     const d = new Date(start.getTime() + i * 86400000);
@@ -157,7 +185,11 @@ function demoDashboard(f: Filters) {
 
     days.push({
       day: d.toISOString().slice(0, 10),
-      revenue: round((4200 + (seed % 3600) + (i % 3) * 450) * storeFactor * filterFactor)
+      revenue: round(
+        (4200 + (seed % 3600) + (i % 3) * 450) *
+        storeFactor *
+        filterFactor
+      )
     });
   }
 
@@ -166,11 +198,46 @@ function demoDashboard(f: Filters) {
   const cost = round(revenue * 0.69);
 
   const products = [
-    { product: 'Banana prata', quantity: 824 * storeFactor, revenue: 4120 * storeFactor, cost: 2760 * storeFactor, group: 'Hortifrúti', groupCode: 1 },
-    { product: 'Tomate', quantity: 692 * storeFactor, revenue: 3460 * storeFactor, cost: 2320 * storeFactor, group: 'Hortifrúti', groupCode: 1 },
-    { product: 'Arroz 5kg', quantity: 215 * storeFactor, revenue: 3225 * storeFactor, cost: 2580 * storeFactor, group: 'Mercearia', groupCode: 2 },
-    { product: 'Batata', quantity: 510 * storeFactor, revenue: 2550 * storeFactor, cost: 1680 * storeFactor, group: 'Hortifrúti', groupCode: 1 },
-    { product: 'Leite integral', quantity: 388 * storeFactor, revenue: 2134 * storeFactor, cost: 1710 * storeFactor, group: 'Mercearia', groupCode: 2 }
+    {
+      product: 'Banana prata',
+      quantity: 824 * storeFactor,
+      revenue: 4120 * storeFactor,
+      cost: 2760 * storeFactor,
+      group: 'Hortifrúti',
+      groupCode: 1
+    },
+    {
+      product: 'Tomate',
+      quantity: 692 * storeFactor,
+      revenue: 3460 * storeFactor,
+      cost: 2320 * storeFactor,
+      group: 'Hortifrúti',
+      groupCode: 1
+    },
+    {
+      product: 'Arroz 5kg',
+      quantity: 215 * storeFactor,
+      revenue: 3225 * storeFactor,
+      cost: 2580 * storeFactor,
+      group: 'Mercearia',
+      groupCode: 2
+    },
+    {
+      product: 'Batata',
+      quantity: 510 * storeFactor,
+      revenue: 2550 * storeFactor,
+      cost: 1680 * storeFactor,
+      group: 'Hortifrúti',
+      groupCode: 1
+    },
+    {
+      product: 'Leite integral',
+      quantity: 388 * storeFactor,
+      revenue: 2134 * storeFactor,
+      cost: 1710 * storeFactor,
+      group: 'Mercearia',
+      groupCode: 2
+    }
   ].filter(p =>
     (!f.group || String(p.groupCode) === f.group) &&
     (!f.product || p.product.toLowerCase().includes(f.product.toLowerCase()))
@@ -183,7 +250,11 @@ function demoDashboard(f: Filters) {
     { method: 'CARTAO DEBITO TEF', brand: 'VISA DEBITO', amount: round(revenue * .175) },
     { method: 'CARTAO CREDITO TEF', brand: 'MASTER CREDITO', amount: round(revenue * .115) },
     { method: 'CARTAO CREDITO TEF', brand: 'VISA CREDITO', amount: round(revenue * .075) }
-  ].filter(p => !f.payment || p.method === f.payment || p.brand === f.payment);
+  ].filter(p =>
+    !f.payment ||
+    p.method === f.payment ||
+    p.brand === f.payment
+  );
 
   const demoShares: Record<number, number> = {
     1: 0.40,
@@ -191,9 +262,10 @@ function demoDashboard(f: Filters) {
     3: 0.29
   };
 
-  const storeSales = (f.store === '0'
-    ? STORES
-    : STORES.filter(s => s.id === Number(f.store))
+  const storeSales = (
+    f.store === '0'
+      ? STORES
+      : STORES.filter(s => s.id === Number(f.store))
   ).map(s => {
     const share = f.store === '0' ? demoShares[s.id] : 1;
     const r = round(revenue * share);
@@ -274,6 +346,7 @@ app.get('/api/health', async (_req, res) => {
       agentConnected: Boolean(ping && Date.now() - ping < 10000),
       redis: 'connected'
     });
+
   } catch {
     res.status(503).json({
       ok: false,
@@ -308,7 +381,9 @@ app.get('/api/dashboard', async (req: Request, res: Response) => {
 
     if (DEMO_MODE) {
       const data = demoDashboard(filters);
+
       await setCache(key, data);
+
       return res.json({
         ...data,
         cache: {
@@ -323,13 +398,13 @@ app.get('/api/dashboard', async (req: Request, res: Response) => {
       filters
     });
 
-    res.status(202).json({
+    return res.status(202).json({
       jobId: id,
       status: 'queued'
     });
 
   } catch (e: any) {
-    res.status(500).json({
+    return res.status(500).json({
       error: e.message || 'Falha ao solicitar dashboard.'
     });
   }
@@ -366,12 +441,12 @@ app.get('/api/jobs/:id', async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       status: job.status
     });
 
   } catch (e: any) {
-    res.status(500).json({
+    return res.status(500).json({
       error: e.message || 'Falha ao consultar tarefa.'
     });
   }
@@ -398,7 +473,10 @@ app.get('/api/sales/:storeId/:documentId', async (req, res) => {
   try {
     if (!force) {
       const cached = await getCache(key);
-      if (cached) return res.json(cached.value);
+
+      if (cached) {
+        return res.json(cached.value);
+      }
     }
 
     const id = await enqueue({
@@ -408,13 +486,13 @@ app.get('/api/sales/:storeId/:documentId', async (req, res) => {
       date
     });
 
-    res.status(202).json({
+    return res.status(202).json({
       jobId: id,
       status: 'queued'
     });
 
   } catch (e: any) {
-    res.status(500).json({
+    return res.status(500).json({
       error: e.message || 'Falha ao solicitar venda.'
     });
   }
@@ -430,23 +508,38 @@ app.get('/api/agent/next', async (req, res) => {
   try {
     await redis.set('mcbi:agent:lastPing', Date.now(), { ex: 30 });
 
-    const raw = await redis.rpop<string>(QUEUE_KEY);
+    const raw = await redis.rpop<Job | string>(QUEUE_KEY);
 
     if (!raw) {
       return res.json({ job: null });
     }
 
-    const job = JSON.parse(raw) as Job;
+    // O Upstash pode devolver o objeto já desserializado.
+    // Só convertemos quando o retorno for realmente uma string.
+    const job: Job =
+      typeof raw === 'string'
+        ? JSON.parse(raw)
+        : raw;
 
-    await redis.set(jobKey(job.id), {
-      status: 'processing',
-      createdAt: job.createdAt
-    }, { ex: JOB_TTL });
+    if (!job || !job.id || !job.type) {
+      throw new Error('Tarefa inválida recebida da fila.');
+    }
 
-    res.json({ job });
+    await redis.set(
+      jobKey(job.id),
+      {
+        status: 'processing',
+        createdAt: job.createdAt
+      },
+      { ex: JOB_TTL }
+    );
+
+    return res.json({ job });
 
   } catch (e: any) {
-    res.status(500).json({
+    console.error('[AGENT NEXT ERROR]', e);
+
+    return res.status(500).json({
       error: e.message || 'Falha ao buscar tarefa.'
     });
   }
@@ -476,20 +569,46 @@ app.post('/api/agent/result', async (req, res) => {
       });
     }
 
-    await redis.set(resultKey(String(id)), {
-      status: error ? 'error' : 'completed',
-      data: error ? null : data,
-      error: error ? String(error) : null
-    }, { ex: JOB_TTL });
+    await redis.set(
+      resultKey(String(id)),
+      {
+        status: error ? 'error' : 'completed',
+        data: error ? null : data,
+        error: error ? String(error) : null
+      },
+      { ex: JOB_TTL }
+    );
 
-    await redis.set(jobKey(String(id)), {
-      status: error ? 'error' : 'completed'
-    }, { ex: JOB_TTL });
+    await redis.set(
+      jobKey(String(id)),
+      {
+        status: error ? 'error' : 'completed'
+      },
+      { ex: JOB_TTL }
+    );
 
-    res.json({ ok: true });
+    // Recupera as informações da tarefa para atualizar o cache.
+    if (!error && job.type === 'dashboard' && job.filters) {
+      const key = cacheKey('dashboard', job.filters);
+      await setCache(key, data);
+    }
+
+    if (!error && job.type === 'sale') {
+      const key = cacheKey('sale', {
+        storeId: job.storeId,
+        documentId: job.documentId,
+        date: job.date
+      });
+
+      await setCache(key, data);
+    }
+
+    return res.json({ ok: true });
 
   } catch (e: any) {
-    res.status(500).json({
+    console.error('[AGENT RESULT ERROR]', e);
+
+    return res.status(500).json({
       error: e.message || 'Falha ao salvar resultado.'
     });
   }
@@ -506,14 +625,14 @@ app.get('/api/agent/status', async (req, res) => {
     const queuedJobs = await redis.llen(QUEUE_KEY);
     const lastPing = await redis.get<number>('mcbi:agent:lastPing');
 
-    res.json({
+    return res.json({
       queuedJobs,
       lastPing,
       agentConnected: Boolean(lastPing && Date.now() - lastPing < 10000)
     });
 
   } catch (e: any) {
-    res.status(500).json({
+    return res.status(500).json({
       error: e.message || 'Falha ao consultar status.'
     });
   }
