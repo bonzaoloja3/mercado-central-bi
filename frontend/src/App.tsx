@@ -85,7 +85,9 @@ type SaleResult = {
   source?: string;
 };
 
-const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
+const API = (
+  import.meta.env.VITE_API_URL || 'http://localhost:3001'
+).replace(/\/$/, '');
 
 const money = (v: number | string) =>
   Number(v || 0).toLocaleString('pt-BR', {
@@ -93,7 +95,8 @@ const money = (v: number | string) =>
     currency: 'BRL'
   });
 
-const number = (v: number) => Number(v || 0).toLocaleString('pt-BR');
+const number = (v: number) =>
+  Number(v || 0).toLocaleString('pt-BR');
 
 const dateLocal = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -116,22 +119,48 @@ const pct = (value: number, max: number) =>
 const sleep = (ms: number) =>
   new Promise(resolve => setTimeout(resolve, ms));
 
-/**
- * Aguarda uma tarefa assíncrona do backend.
- *
- * Compatível com:
- * - Respostas imediatas do modo demonstração.
- * - Respostas HTTP 202 com jobId.
- * - Consulta periódica do andamento da tarefa.
- */
-async function fetchJobResult<T>(response: Response): Promise<T> {
-  const initial = await response.json();
+// ======================================================
+// LEITURA SEGURA DAS RESPOSTAS DO BACKEND
+// ======================================================
 
-  if (!response.ok) {
-    throw new Error(initial.error || 'Não foi possível iniciar a consulta.');
+async function readResponse(response: Response): Promise<any> {
+  const text = await response.text();
+
+  if (!text) {
+    throw new Error(
+      `O backend retornou uma resposta vazia (HTTP ${response.status}).`
+    );
   }
 
-  // Se o backend já retornou os dados, não precisamos consultar a fila.
+  try {
+    return JSON.parse(text);
+  } catch {
+    const preview = text
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 180);
+
+    throw new Error(
+      `O backend retornou uma resposta que não é JSON (HTTP ${response.status}). ${preview}`
+    );
+  }
+}
+
+// ======================================================
+// PROCESSAMENTO DE TAREFAS ASSÍNCRONAS
+// ======================================================
+
+async function fetchJobResult<T>(response: Response): Promise<T> {
+  const initial = await readResponse(response);
+
+  if (!response.ok) {
+    throw new Error(
+      initial.error ||
+      `Erro ao iniciar consulta (HTTP ${response.status}).`
+    );
+  }
+
   if (response.status !== 202 && !initial.jobId) {
     return initial as T;
   }
@@ -139,7 +168,9 @@ async function fetchJobResult<T>(response: Response): Promise<T> {
   const jobId = initial.jobId;
 
   if (!jobId) {
-    throw new Error('O backend não retornou o identificador da tarefa.');
+    throw new Error(
+      'O backend não retornou o identificador da tarefa.'
+    );
   }
 
   const maxAttempts = 120;
@@ -148,14 +179,22 @@ async function fetchJobResult<T>(response: Response): Promise<T> {
     await sleep(1500);
 
     const jobResponse = await fetch(
-      `${API}/api/jobs/${encodeURIComponent(jobId)}`
+      `${API}/api/jobs/${encodeURIComponent(jobId)}`,
+      {
+        method: 'GET',
+        cache: 'no-store',
+        headers: {
+          Accept: 'application/json'
+        }
+      }
     );
 
-    const job = await jobResponse.json();
+    const job = await readResponse(jobResponse);
 
     if (!jobResponse.ok) {
       throw new Error(
-        job.error || 'Erro ao consultar o andamento da tarefa.'
+        job.error ||
+        `Erro ao consultar tarefa (HTTP ${jobResponse.status}).`
       );
     }
 
@@ -178,7 +217,9 @@ async function fetchJobResult<T>(response: Response): Promise<T> {
     }
 
     if (!['queued', 'processing', 'pending'].includes(job.status)) {
-      throw new Error(`Status inesperado da tarefa: ${job.status}`);
+      throw new Error(
+        `Status inesperado da tarefa: ${job.status || 'indefinido'}.`
+      );
     }
   }
 
@@ -186,6 +227,10 @@ async function fetchJobResult<T>(response: Response): Promise<T> {
     'A consulta demorou mais que o esperado. Verifique se o agente está conectado.'
   );
 }
+
+// ======================================================
+// COMPONENTE PRINCIPAL
+// ======================================================
 
 export default function App() {
   const [filters, setFilters] = useState<Filters>(initialFilters);
@@ -204,6 +249,10 @@ export default function App() {
   const [saleError, setSaleError] = useState('');
 
   const groupSales = data?.groupSales || [];
+
+  // ======================================================
+  // CARREGAR DASHBOARD
+  // ======================================================
 
   const load = useCallback(async (manual = false, override?: Filters) => {
     const current = override || filters;
@@ -225,7 +274,13 @@ export default function App() {
       if (manual) q.set('refresh', '1');
 
       const response = await fetch(
-        `${API}/api/dashboard?${q.toString()}`
+        `${API}/api/dashboard?${q.toString()}`,
+        {
+          headers: {
+            Accept: 'application/json'
+          },
+          cache: 'no-store'
+        }
       );
 
       const result = await fetchJobResult<Dashboard>(response);
@@ -260,6 +315,10 @@ export default function App() {
     setFilters(old => ({ ...old, ...patch }));
 
   const resetFilters = () => setFilters(initialFilters);
+
+  // ======================================================
+  // GRÁFICO DIÁRIO
+  // ======================================================
 
   const dailyOption = useMemo(() => ({
     animationDuration: 500,
@@ -302,6 +361,10 @@ export default function App() {
       emphasis: { focus: 'series', scale: 1.5 }
     }]
   }), [data]);
+
+  // ======================================================
+  // FORMAS DE PAGAMENTO
+  // ======================================================
 
   const paymentOptions = useMemo(() => {
     const opts = new Map<string, string>();
@@ -421,6 +484,10 @@ export default function App() {
     }]
   }), [paymentTotals]);
 
+  // ======================================================
+  // GRÁFICO DE PRODUTOS
+  // ======================================================
+
   const productOption = useMemo(() => ({
     animationDuration: 500,
     tooltip: {
@@ -472,6 +539,10 @@ export default function App() {
       }
     }]
   }), [data]);
+
+  // ======================================================
+  // GRUPOS
+  // ======================================================
 
   const groupOption = useMemo(() => ({
     animationDuration: 600,
@@ -567,6 +638,10 @@ export default function App() {
     }]
   }), [groupSales]);
 
+  // ======================================================
+  // VENDAS MENSAIS
+  // ======================================================
+
   const monthlyOption = useMemo(() => ({
     animationDuration: 600,
     tooltip: {
@@ -616,6 +691,10 @@ export default function App() {
     }]
   }), [data]);
 
+  // ======================================================
+  // INTERAÇÕES DOS GRÁFICOS
+  // ======================================================
+
   const onDailyClick = (p: any) => {
     if (p?.name) update({ from: p.name, to: p.name });
   };
@@ -648,6 +727,10 @@ export default function App() {
     }
   };
 
+  // ======================================================
+  // CONSULTAR VENDA INDIVIDUAL
+  // ======================================================
+
   const searchSale = async () => {
     if (!saleDocument.trim()) {
       setSaleError('Informe o número do cupom.');
@@ -663,7 +746,12 @@ export default function App() {
         `${API}/api/sales/${saleStore}/${encodeURIComponent(saleDocument.trim())}` +
         `?date=${saleDate}&refresh=1`;
 
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: {
+          Accept: 'application/json'
+        },
+        cache: 'no-store'
+      });
 
       const result = await fetchJobResult<SaleResult>(response);
 
@@ -680,6 +768,10 @@ export default function App() {
       setSaleLoading(false);
     }
   };
+
+  // ======================================================
+  // INDICADORES
+  // ======================================================
 
   const k = data?.kpis;
 
@@ -710,6 +802,10 @@ export default function App() {
       from: initialFilters.from,
       to: initialFilters.to
     });
+
+  // ======================================================
+  // INTERFACE
+  // ======================================================
 
   return (
     <main className="shell">
@@ -1341,6 +1437,10 @@ export default function App() {
   );
 }
 
+// ======================================================
+// COMPONENTE KPI
+// ======================================================
+
 function Kpi({
   label,
   value,
@@ -1358,6 +1458,10 @@ function Kpi({
     </article>
   );
 }
+
+// ======================================================
+// COMPONENTE GAUGE
+// ======================================================
 
 function Gauge({
   title,
