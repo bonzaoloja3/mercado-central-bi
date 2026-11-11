@@ -1,3 +1,4 @@
+
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 
@@ -136,6 +137,56 @@ const initialFilters: Filters = {
   hour: ''
 };
 
+// Cria uma escala gradual de verdes.
+function interpolateGreen(start: string, end: string, steps: number) {
+  const hexToRgb = (hex: string) => ({
+    r: parseInt(hex.slice(1, 3), 16),
+    g: parseInt(hex.slice(3, 5), 16),
+    b: parseInt(hex.slice(5, 7), 16)
+  });
+
+  const rgbToHex = (r: number, g: number, b: number) =>
+    '#' + [r, g, b]
+      .map(v => Math.round(v).toString(16).padStart(2, '0'))
+      .join('');
+
+  const a = hexToRgb(start);
+  const b = hexToRgb(end);
+
+  return Array.from({ length: steps }, (_, i) => {
+    const t = steps === 1 ? 0 : i / (steps - 1);
+
+    return rgbToHex(
+      a.r + (b.r - a.r) * t,
+      a.g + (b.g - a.g) * t,
+      a.b + (b.b - a.b) * t
+    );
+  });
+}
+
+// 20 faixas de 10 cupons, de 1 até 200.
+const heatmapGreenColors = interpolateGreen(
+  '#d5f0dc',
+  '#174c2e',
+  20
+);
+
+const heatmapPieces = [
+  {
+    value: 0,
+    color: '#e8f6eb'
+  },
+  ...heatmapGreenColors.map((color, i) => ({
+    min: i * 10 + 1,
+    max: i * 10 + 10,
+    color
+  })),
+  {
+    min: 201,
+    color: '#103d25'
+  }
+];
+
 export default function App() {
   const [filters, setFilters] = useState<Filters>(initialFilters);
   const [data, setData] = useState<Dashboard | null>(null);
@@ -233,9 +284,7 @@ export default function App() {
     },
     yAxis: {
       type: 'value',
-      axisLabel: {
-        color: '#aab8ae'
-      },
+      axisLabel: { color: '#aab8ae' },
       splitLine: { lineStyle: { color: '#26352d' } }
     },
     series: [{
@@ -277,8 +326,6 @@ export default function App() {
     return [...totals].map(([name, value]) => ({ name, value }));
   }, [data]);
 
-  // Gráfico de pagamentos.
-  // No celular, a rosca fica menor à esquerda e a legenda à direita.
   const paymentOption = useMemo(() => {
     const total = paymentTotals.reduce(
       (sum, p) => sum + Number(p.value),
@@ -313,18 +360,14 @@ export default function App() {
         itemHeight: 12,
         itemGap: 13,
         pageIconColor: '#79c99a',
-        pageTextStyle: {
-          color: '#aab8ae'
-        },
+        pageTextStyle: { color: '#aab8ae' },
         textStyle: {
           color: '#aab8ae',
           fontSize: 10
         },
         formatter: (name: string) => {
           const item = paymentTotals.find(p => p.name === name);
-          return item
-            ? `${name}  ${percentage(item.value)}`
-            : name;
+          return item ? `${name}  ${percentage(item.value)}` : name;
         }
       },
 
@@ -332,32 +375,21 @@ export default function App() {
         type: 'pie',
         radius: ['43%', '66%'],
         center: ['28%', '50%'],
-
         itemStyle: {
           borderColor: '#17231c',
           borderWidth: 3
         },
-
-        label: {
-          show: false
-        },
-
-        labelLine: {
-          show: false
-        },
-
+        label: { show: false },
+        labelLine: { show: false },
         emphasis: {
           scale: true,
           scaleSize: 7,
-          label: {
-            show: false
-          },
+          label: { show: false },
           itemStyle: {
             shadowBlur: 15,
             shadowColor: 'rgba(0,0,0,.3)'
           }
         },
-
         data: paymentTotals
       }],
 
@@ -438,8 +470,6 @@ export default function App() {
     }]
   }), [data]);
 
-  // Grupos de produtos.
-  // No celular, rosca menor à esquerda e legenda vertical à direita.
   const groupOption = useMemo(() => {
     const groupData = (data?.groupSales || []).map(g => ({
       name: g.name,
@@ -478,9 +508,7 @@ export default function App() {
         },
         formatter: (name: string) => {
           const item = groupData.find(g => g.name === name);
-          return item
-            ? `${name}  ${percentage(item.value)}`
-            : name;
+          return item ? `${name}  ${percentage(item.value)}` : name;
         }
       },
 
@@ -489,16 +517,11 @@ export default function App() {
         radius: ['42%', '68%'],
         center: ['69%', '50%'],
         avoidLabelOverlap: true,
-
         itemStyle: {
           borderColor: '#17231c',
           borderWidth: 3
         },
-
-        label: {
-          show: false
-        },
-
+        label: { show: false },
         emphasis: {
           scale: true,
           scaleSize: 8,
@@ -514,7 +537,6 @@ export default function App() {
             shadowColor: 'rgba(0,0,0,.35)'
           }
         },
-
         data: groupData
       }],
 
@@ -643,11 +665,6 @@ export default function App() {
     return hour >= 7 && hour <= 20;
   });
 
-  const heatmapMax = Math.max(
-    1,
-    ...heatmapVisibleData.map(item => Number(item.coupons))
-  );
-
   const heatmapOption = useMemo(() => ({
     animationDuration: 500,
 
@@ -681,54 +698,29 @@ export default function App() {
         interval: 0
       },
       axisLine: {
-        lineStyle: {
-          color: '#34443b'
-        }
+        lineStyle: { color: '#34443b' }
       }
     },
 
     yAxis: {
       type: 'category',
       data: weekdayNames,
-      axisLabel: {
-        color: '#aab8ae'
-      },
+      axisLabel: { color: '#aab8ae' },
       axisLine: {
-        lineStyle: {
-          color: '#34443b'
-        }
+        lineStyle: { color: '#34443b' }
       }
     },
 
+    // Escala fixa por faixas de 10 cupons.
+    // Não depende do maior valor retornado pela consulta.
     visualMap: {
-      type: 'continuous',
-      min: 0,
-      max: heatmapMax,
-      calculable: false,
+      type: 'piecewise',
+      dimension: 2,
       orient: 'horizontal',
       left: 'center',
       bottom: 0,
       show: false,
-
-      // Pouco movimento = verde claro.
-      // Muito movimento = verde escuro.
-      inRange: {
-        color: [
-          '#e1f3e5',
-          '#c9e9d0',
-          '#a9dbb6',
-          '#85cb99',
-          '#65b77e',
-          '#469b63',
-          '#307e4c',
-          '#205f39',
-          '#124528'
-        ]
-      },
-
-      outOfRange: {
-        color: ['#e1f3e5']
-      }
+      pieces: heatmapPieces
     },
 
     series: [{
@@ -760,7 +752,7 @@ export default function App() {
         }
       }
     }]
-  }), [heatmapVisibleData, heatmapMax]);
+  }), [heatmapVisibleData]);
 
   const onGroupClick = (p: any) => {
     const found = (data?.groupSales || []).find(g => g.name === p?.name);
