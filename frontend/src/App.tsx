@@ -1,3 +1,4 @@
+
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 
@@ -277,39 +278,110 @@ export default function App() {
     return [...totals].map(([name, value]) => ({ name, value }));
   }, [data]);
 
-  const paymentOption = useMemo(() => ({
-    animationDuration: 500,
-    tooltip: {
-      trigger: 'item',
-      backgroundColor: '#203229',
-      borderColor: '#45634f',
-      textStyle: { color: '#edf4ef' },
-      formatter: (p: any) => `${p.name}<br/>${money(p.value)} (${p.percent}%)`
-    },
-    legend: {
-      bottom: 0,
-      textStyle: { color: '#aab8ae' }
-    },
-    series: [{
-      type: 'pie',
-      radius: ['45%', '70%'],
-      center: ['50%', '44%'],
-      itemStyle: {
-        borderColor: '#17231c',
-        borderWidth: 3
+  // Gráfico de pagamentos: rosca à esquerda e legenda vertical à direita.
+  const paymentOption = useMemo(() => {
+    const total = paymentTotals.reduce(
+      (sum, p) => sum + Number(p.value),
+      0
+    );
+
+    const percentage = (value: number) =>
+      total > 0
+        ? `${((value / total) * 100).toFixed(1).replace('.', ',')}%`
+        : '0%';
+
+    return {
+      animationDuration: 500,
+
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: '#203229',
+        borderColor: '#45634f',
+        textStyle: { color: '#edf4ef' },
+        formatter: (p: any) =>
+          `${p.name}<br/>${money(p.value)} (${p.percent.toFixed(1).replace('.', ',')}%)`
       },
-      label: { color: '#dce7df' },
-      emphasis: {
-        scale: true,
-        scaleSize: 9,
-        itemStyle: {
-          shadowBlur: 18,
-          shadowColor: 'rgba(0,0,0,.35)'
+
+      legend: {
+        type: 'scroll',
+        orient: 'vertical',
+        right: 5,
+        top: 'middle',
+        bottom: 15,
+        width: '43%',
+        itemWidth: 12,
+        itemHeight: 12,
+        itemGap: 13,
+        pageIconColor: '#79c99a',
+        pageTextStyle: {
+          color: '#aab8ae'
+        },
+        textStyle: {
+          color: '#aab8ae',
+          fontSize: 10
+        },
+        formatter: (name: string) => {
+          const item = paymentTotals.find(p => p.name === name);
+          return item
+            ? `${name}  ${percentage(item.value)}`
+            : name;
         }
       },
-      data: paymentTotals
-    }]
-  }), [paymentTotals]);
+
+      series: [{
+        type: 'pie',
+        radius: ['43%', '66%'],
+        center: ['28%', '50%'],
+
+        itemStyle: {
+          borderColor: '#17231c',
+          borderWidth: 3
+        },
+
+        label: {
+          show: false
+        },
+
+        labelLine: {
+          show: false
+        },
+
+        emphasis: {
+          scale: true,
+          scaleSize: 7,
+          label: {
+            show: false
+          },
+          itemStyle: {
+            shadowBlur: 15,
+            shadowColor: 'rgba(0,0,0,.3)'
+          }
+        },
+
+        data: paymentTotals
+      }],
+
+      media: [
+        {
+          query: { maxWidth: 600 },
+          option: {
+            legend: {
+              right: 0,
+              width: '45%',
+              itemGap: 10,
+              textStyle: {
+                fontSize: 9
+              }
+            },
+            series: [{
+              center: ['27%', '50%'],
+              radius: ['38%', '58%']
+            }]
+          }
+        }
+      ]
+    };
+  }, [paymentTotals]);
 
   const productOption = useMemo(() => ({
     animationDuration: 500,
@@ -359,50 +431,111 @@ export default function App() {
     }]
   }), [data]);
 
-  const groupOption = useMemo(() => ({
-    animationDuration: 600,
-    tooltip: {
-      trigger: 'item',
-      backgroundColor: '#203229',
-      borderColor: '#45634f',
-      textStyle: { color: '#edf4ef' },
-      formatter: (p: any) => `${p.name}<br/>${money(p.value)} (${p.percent}%)`
-    },
-    legend: {
-      orient: 'vertical',
-      left: 8,
-      top: 'middle',
-      textStyle: { color: '#aab8ae', fontSize: 11 }
-    },
-    series: [{
-      type: 'pie',
-      radius: ['42%', '70%'],
-      center: ['68%', '50%'],
-      itemStyle: {
-        borderColor: '#17231c',
-        borderWidth: 3
+  // Grupos: porcentagem na legenda e reposicionamento automático no celular.
+  const groupOption = useMemo(() => {
+    const groupData = (data?.groupSales || []).map(g => ({
+      name: g.name,
+      value: Number(g.revenue)
+    }));
+
+    const total = groupData.reduce((sum, g) => sum + g.value, 0);
+
+    const percentage = (value: number) =>
+      total > 0
+        ? `${((value / total) * 100).toFixed(1).replace('.', ',')}%`
+        : '0%';
+
+    return {
+      animationDuration: 600,
+
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: '#203229',
+        borderColor: '#45634f',
+        textStyle: { color: '#edf4ef' },
+        formatter: (p: any) =>
+          `${p.name}<br/>${money(p.value)} (${p.percent.toFixed(1).replace('.', ',')}%)`
       },
-      label: { show: false },
-      emphasis: {
-        scale: true,
-        scaleSize: 10,
-        label: {
-          show: true,
-          color: '#edf4ef',
-          fontWeight: 700,
-          formatter: '{b}\n{d}%'
+
+      legend: {
+        orient: 'vertical',
+        left: 8,
+        top: 'middle',
+        itemWidth: 13,
+        itemHeight: 13,
+        itemGap: 14,
+        textStyle: {
+          color: '#aab8ae',
+          fontSize: 11
         },
-        itemStyle: {
-          shadowBlur: 18,
-          shadowColor: 'rgba(0,0,0,.35)'
+        formatter: (name: string) => {
+          const item = groupData.find(g => g.name === name);
+          return item
+            ? `${name}  ${percentage(item.value)}`
+            : name;
         }
       },
-      data: (data?.groupSales || []).map(g => ({
-        name: g.name,
-        value: g.revenue
-      }))
-    }]
-  }), [data]);
+
+      series: [{
+        type: 'pie',
+        radius: ['42%', '68%'],
+        center: ['69%', '50%'],
+        avoidLabelOverlap: true,
+
+        itemStyle: {
+          borderColor: '#17231c',
+          borderWidth: 3
+        },
+
+        label: {
+          show: false
+        },
+
+        emphasis: {
+          scale: true,
+          scaleSize: 8,
+          label: {
+            show: true,
+            color: '#edf4ef',
+            fontWeight: 700,
+            formatter: (p: any) =>
+              `${p.percent.toFixed(1).replace('.', ',')}%`
+          },
+          itemStyle: {
+            shadowBlur: 18,
+            shadowColor: 'rgba(0,0,0,.35)'
+          }
+        },
+
+        data: groupData
+      }],
+
+      media: [
+        {
+          query: { maxWidth: 600 },
+          option: {
+            legend: {
+              orient: 'horizontal',
+              left: 'center',
+              right: 'center',
+              top: '72%',
+              bottom: 0,
+              itemGap: 10,
+              itemWidth: 11,
+              itemHeight: 11,
+              textStyle: {
+                fontSize: 10
+              }
+            },
+            series: [{
+              center: ['50%', '35%'],
+              radius: ['32%', '53%']
+            }]
+          }
+        }
+      ]
+    };
+  }, [data]);
 
   const monthlyOption = useMemo(() => ({
     animationDuration: 600,
@@ -877,8 +1010,9 @@ export default function App() {
           </div>
           <ReactECharts
             option={groupOption}
+            notMerge={true}
             onEvents={{ click: onGroupClick }}
-            style={{ height: 285 }}
+            style={{ height: 320 }}
           />
         </article>
       </section>
@@ -938,8 +1072,9 @@ export default function App() {
 
           <ReactECharts
             option={paymentOption}
+            notMerge={true}
             onEvents={{ click: onPaymentClick }}
-            style={{ height: 300 }}
+            style={{ height: 340 }}
           />
         </article>
       </section>
@@ -1215,13 +1350,11 @@ function Gauge({
   greenStart: number;
   subtitle: string;
 }) {
-  // Valor real que será exibido abaixo do velocímetro.
   const displayedValue = Math.max(
     0,
     Number.isFinite(value) ? value : 0
   );
 
-  // Limita somente a posição do ponteiro à escala.
   const needleValue = Math.min(max, displayedValue);
 
   const zone =
@@ -1293,12 +1426,10 @@ function Gauge({
         show: false
       },
 
-      // Esconde os números 0%, 85% e 100% da escala.
       axisLabel: {
         show: false
       },
 
-      // Esconde o percentual que aparecia dentro do velocímetro.
       detail: {
         show: false
       },
