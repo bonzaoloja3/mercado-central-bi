@@ -202,6 +202,7 @@ export default function App() {
     direction: 'desc'
   });
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches);
+  const [annualChartType, setAnnualChartType] = useState<'line' | 'bar'>('line');
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 760px)');
@@ -493,130 +494,126 @@ export default function App() {
     });
   }, [data, filters.to]);
 
-  const monthlyCombinedOption = useMemo(() => ({
-    animationDuration: 650,
-    color: ['#529ee0', '#a982c7', '#ef8585'],
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
-      backgroundColor: '#203229',
-      borderColor: '#45634f',
-      textStyle: { color: '#edf4ef' },
-      formatter: (params: any[]) => {
-        if (!params?.length) return '';
-        const month = annualMonths[params[0].dataIndex];
-        if (!month) return '';
-        return [
-          `<strong>${month.label}</strong>`,
-          `<span style="color:#529ee0">●</span> Valor Total: <strong>${money(month.revenue)}</strong>`,
-          `<span style="color:#a982c7">●</span> Valor Médio Diário: <strong>${money(month.averageDaily)}</strong>`,
-          `<span style="color:#ef8585">●</span> Markup: <strong>${month.markup == null ? 'Sem dado' : percent(month.markup)}</strong>`
-        ].join('<br/>');
-      }
-    },
-    legend: {
-      top: 5,
-      left: 'center',
-      itemGap: 20,
-      textStyle: { color: '#aab8ae', fontSize: 11 },
-      data: ['Valor Total', 'Valor Médio Diário', 'Markup'],
-      emphasis: { selectorLabel: { color: '#fff' } }
-    },
-    grid: { left: 76, right: 76, top: 55, bottom: 42, containLabel: false },
-    xAxis: {
-      type: 'category',
-      data: annualMonths.map(m => m.label),
-      axisLine: { lineStyle: { color: '#34443b' } },
-      axisLabel: { color: '#aab8ae' }
-    },
-    yAxis: [
-      {
-        type: 'value',
-        name: 'Faturamento',
-        nameTextStyle: { color: '#529ee0' },
-        axisLabel: { color: '#aab8ae', formatter: (v: number) => `R$${number(v)}` },
-        splitLine: { lineStyle: { color: '#26352d' } }
-      },
-      {
-        type: 'value',
-        name: 'Média diária',
-        nameTextStyle: { color: '#a982c7' },
-        axisLabel: { color: '#aab8ae', formatter: (v: number) => `R$${number(v)}` },
-        splitLine: { show: false }
-      },
-      {
-        type: 'value',
-        name: 'Markup',
-        nameTextStyle: { color: '#ef8585' },
-        axisLabel: { color: '#aab8ae', formatter: (v: number) => `${v}%` },
-        splitLine: { show: false }
-      }
-    ],
-    series: [
+  const annualChartOption = useMemo(() => {
+    const colors = ['#529ee0', '#a982c7', '#ef8585'];
+    const useLines = isMobile || annualChartType === 'line';
+    const series = [
       {
         name: 'Valor Total',
-        type: 'bar',
+        type: useLines ? 'line' : 'bar',
         yAxisIndex: 0,
-        barMaxWidth: 25,
+        smooth: useLines,
+        showSymbol: useLines,
+        symbol: 'circle',
+        symbolSize: useLines ? 6 : 0,
+        barMaxWidth: 26,
         data: annualMonths.map(m => m.revenue),
-        itemStyle: { color: '#529ee0', borderRadius: [4, 4, 0, 0] },
-        emphasis: { focus: 'series' }
+        itemStyle: { color: colors[0], borderRadius: useLines ? 0 : [4, 4, 0, 0] },
+        lineStyle: { color: colors[0], width: 2.5 },
+        emphasis: { focus: 'series', scale: 1.3 }
       },
       {
         name: 'Valor Médio Diário',
-        type: 'bar',
+        type: useLines ? 'line' : 'bar',
         yAxisIndex: 1,
-        barMaxWidth: 25,
+        smooth: useLines,
+        showSymbol: useLines,
+        symbol: 'circle',
+        symbolSize: useLines ? 6 : 0,
+        barMaxWidth: 26,
         data: annualMonths.map(m => m.averageDaily),
-        itemStyle: { color: '#a982c7', borderRadius: [4, 4, 0, 0] },
-        emphasis: { focus: 'series' }
+        itemStyle: { color: colors[1], borderRadius: useLines ? 0 : [4, 4, 0, 0] },
+        lineStyle: { color: colors[1], width: 2.5 },
+        emphasis: { focus: 'series', scale: 1.3 }
       },
       {
         name: 'Markup',
         type: 'line',
         yAxisIndex: 2,
-        smooth: false,
+        smooth: useLines,
+        showSymbol: true,
         symbol: 'circle',
         symbolSize: 7,
         connectNulls: false,
         data: annualMonths.map(m => m.markup),
-        lineStyle: { color: '#ef8585', width: 2.5 },
-        itemStyle: { color: '#ef8585', borderColor: '#fff', borderWidth: 1 },
+        lineStyle: { color: colors[2], width: 2.5 },
+        itemStyle: { color: colors[2], borderColor: '#fff', borderWidth: 1 },
         emphasis: { focus: 'series', scale: 1.4 }
       }
-    ]
-  }), [annualMonths]);
+    ];
 
-  // Em telas pequenas, as três séries viram linhas. Os eixos ficam
-  // independentes e sem rótulos para evitar a sobreposição de escalas;
-  // os valores exatos continuam disponíveis no tooltip.
-  const annualChartOption = useMemo(() => {
-    if (!isMobile) return monthlyCombinedOption;
     return {
-      ...monthlyCombinedOption,
-      grid: { left: 12, right: 12, top: 66, bottom: 48, containLabel: true },
-      legend: { ...monthlyCombinedOption.legend, top: 4, itemGap: 10, textStyle: { color: '#aab8ae', fontSize: 10 } },
-      xAxis: {
-        ...monthlyCombinedOption.xAxis,
-        axisLabel: { color: '#aab8ae', fontSize: 9, interval: 0, rotate: 35, margin: 12 }
+      animationDuration: 650,
+      color: colors,
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: useLines ? 'line' : 'shadow' },
+        backgroundColor: '#203229',
+        borderColor: '#45634f',
+        textStyle: { color: '#edf4ef' },
+        formatter: (params: any[]) => {
+          if (!params?.length) return '';
+          const month = annualMonths[params[0].dataIndex];
+          if (!month) return '';
+          return [
+            `<strong>${month.label}</strong>`,
+            `<span style="color:${colors[0]}">●</span> Valor Total: <strong>${money(month.revenue)}</strong>`,
+            `<span style="color:${colors[1]}">●</span> Valor Médio Diário: <strong>${money(month.averageDaily)}</strong>`,
+            `<span style="color:${colors[2]}">●</span> Markup: <strong>${month.markup == null ? 'Sem dado' : percent(month.markup)}</strong>`
+          ].join('<br/>');
+        }
       },
-      yAxis: (monthlyCombinedOption.yAxis as any[]).map(axis => ({
-        ...axis, show: false, name: '', axisLabel: { show: false }, axisLine: { show: false },
-        splitLine: { show: false }
-      })),
-      series: (monthlyCombinedOption.series as any[]).map(series => ({
-        ...series,
-        type: 'line',
-        smooth: true,
-        showSymbol: true,
-        symbol: 'circle',
-        symbolSize: 5,
-        barMaxWidth: undefined,
-        itemStyle: { color: series.name === 'Valor Total' ? '#529ee0' : series.name === 'Valor Médio Diário' ? '#a982c7' : '#ef8585' },
-        lineStyle: { color: series.name === 'Valor Total' ? '#529ee0' : series.name === 'Valor Médio Diário' ? '#a982c7' : '#ef8585', width: 2.5 }
-      }))
+      legend: {
+        top: 5,
+        left: 'center',
+        itemGap: isMobile ? 10 : 22,
+        textStyle: { color: '#aab8ae', fontSize: isMobile ? 10 : 12 },
+        data: ['Valor Total', 'Valor Médio Diário', 'Markup']
+      },
+      // Espaço dedicado para cada escala: faturamento à esquerda;
+      // média diária e markup à direita, sem compartilhar a mesma posição.
+      grid: isMobile
+        ? { left: 8, right: 8, top: 58, bottom: 48, containLabel: true }
+        : { left: 88, right: 172, top: 62, bottom: 44, containLabel: false },
+      xAxis: {
+        type: 'category',
+        boundaryGap: !useLines,
+        data: annualMonths.map(m => m.label),
+        axisLine: { lineStyle: { color: '#34443b' } },
+        axisTick: { alignWithLabel: true },
+        axisLabel: { color: '#aab8ae', fontSize: isMobile ? 9 : 11, interval: 0, rotate: isMobile ? 30 : 0 }
+      },
+      yAxis: [
+        {
+          type: 'value',
+          position: 'left',
+          axisLine: { show: true, lineStyle: { color: colors[0] } },
+          axisLabel: { show: !isMobile, color: colors[0], margin: 12, formatter: (v: number) => `R$${number(v)}` },
+          splitLine: { show: true, lineStyle: { color: '#26352d' } },
+          axisTick: { show: false }
+        },
+        {
+          type: 'value',
+          position: 'right',
+          offset: 0,
+          axisLine: { show: !isMobile, lineStyle: { color: colors[1] } },
+          axisLabel: { show: !isMobile, color: colors[1], margin: 10, formatter: (v: number) => `R$${number(v)}` },
+          splitLine: { show: false },
+          axisTick: { show: false }
+        },
+        {
+          type: 'value',
+          position: 'right',
+          offset: 82,
+          axisLine: { show: !isMobile, lineStyle: { color: colors[2] } },
+          axisLabel: { show: !isMobile, color: colors[2], margin: 10, formatter: (v: number) => `${number(v)}%` },
+          splitLine: { show: false },
+          axisTick: { show: false }
+        }
+      ],
+      series
     };
-  }, [isMobile, monthlyCombinedOption]);
+  }, [annualMonths, annualChartType, isMobile]);
 
   const onDailyClick = (p: any) => {
     if (p?.name) update({ from: p.name, to: p.name });
@@ -1069,12 +1066,20 @@ export default function App() {
         <div className="panel-head">
           <div>
             <h2>Desempenho mensal comparativo</h2>
-            <p>Faturamento, média diária e markup ao longo dos 12 meses. Passe o mouse sobre a legenda para destacar cada indicador.</p>
+            <p>Faturamento, média diária e markup ao longo dos 12 meses. Selecione os indicadores na legenda.</p>
           </div>
-          <span className="tag">ANÁLISE ANUAL</span>
+          <div className="annual-chart-actions">
+            {!isMobile && (
+              <div className="chart-type-switch" role="group" aria-label="Tipo de gráfico">
+                <button type="button" className={annualChartType === 'line' ? 'active' : ''} onClick={() => setAnnualChartType('line')}>Linhas</button>
+                <button type="button" className={annualChartType === 'bar' ? 'active' : ''} onClick={() => setAnnualChartType('bar')}>Colunas</button>
+              </div>
+            )}
+            <span className="tag">ANÁLISE ANUAL</span>
+          </div>
         </div>
         <ReactECharts option={annualChartOption} notMerge={true}
-          lazyUpdate={true} style={{ height: isMobile ? 300 : 410, width: '100%' }} />
+          lazyUpdate={true} style={{ height: isMobile ? 300 : 430, width: '100%' }} />
       </section>
 
 
