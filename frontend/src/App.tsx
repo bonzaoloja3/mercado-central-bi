@@ -1,4 +1,3 @@
-
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 
@@ -278,7 +277,8 @@ export default function App() {
     return [...totals].map(([name, value]) => ({ name, value }));
   }, [data]);
 
-  // Gráfico de pagamentos: rosca à esquerda e legenda vertical à direita.
+  // Gráfico de pagamentos.
+  // No celular, a rosca fica menor à esquerda e a legenda à direita.
   const paymentOption = useMemo(() => {
     const total = paymentTotals.reduce(
       (sum, p) => sum + Number(p.value),
@@ -366,16 +366,23 @@ export default function App() {
           query: { maxWidth: 600 },
           option: {
             legend: {
-              right: 0,
+              orient: 'vertical',
+              left: '52%',
+              right: 5,
+              top: 'middle',
+              bottom: 'auto',
               width: '45%',
-              itemGap: 10,
+              itemGap: 12,
+              itemWidth: 10,
+              itemHeight: 10,
               textStyle: {
-                fontSize: 9
+                fontSize: 9,
+                color: '#aab8ae'
               }
             },
             series: [{
-              center: ['27%', '50%'],
-              radius: ['38%', '58%']
+              center: ['26%', '50%'],
+              radius: ['30%', '45%']
             }]
           }
         }
@@ -431,7 +438,8 @@ export default function App() {
     }]
   }), [data]);
 
-  // Grupos: porcentagem na legenda e reposicionamento automático no celular.
+  // Grupos de produtos.
+  // No celular, rosca menor à esquerda e legenda vertical à direita.
   const groupOption = useMemo(() => {
     const groupData = (data?.groupSales || []).map(g => ({
       name: g.name,
@@ -515,21 +523,23 @@ export default function App() {
           query: { maxWidth: 600 },
           option: {
             legend: {
-              orient: 'horizontal',
-              left: 'center',
-              right: 'center',
-              top: '72%',
-              bottom: 0,
-              itemGap: 10,
-              itemWidth: 11,
-              itemHeight: 11,
+              orient: 'vertical',
+              left: '52%',
+              right: 5,
+              top: 'middle',
+              bottom: 'auto',
+              width: '45%',
+              itemGap: 12,
+              itemWidth: 10,
+              itemHeight: 10,
               textStyle: {
-                fontSize: 10
+                fontSize: 9,
+                color: '#aab8ae'
               }
             },
             series: [{
-              center: ['50%', '35%'],
-              radius: ['32%', '53%']
+              center: ['26%', '50%'],
+              radius: ['30%', '45%']
             }]
           }
         }
@@ -622,64 +632,135 @@ export default function App() {
   const heatmapData = data?.heatmap || [];
   const weekdayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
+  // Somente horários entre 07h e 20h, inclusive.
+  const heatmapHours = Array.from(
+    { length: 14 },
+    (_, i) => String(i + 7).padStart(2, '0')
+  );
+
+  const heatmapVisibleData = heatmapData.filter(item => {
+    const hour = Number(item.hour);
+    return hour >= 7 && hour <= 20;
+  });
+
+  const heatmapMax = Math.max(
+    1,
+    ...heatmapVisibleData.map(item => Number(item.coupons))
+  );
+
   const heatmapOption = useMemo(() => ({
+    animationDuration: 500,
+
     tooltip: {
       position: 'top',
       backgroundColor: '#203229',
       borderColor: '#45634f',
       textStyle: { color: '#edf4ef' },
       formatter: (p: any) =>
-        `${weekdayNames[p.data[1]]} · ${String(p.data[0]).padStart(2, '0')}h<br/>${number(p.data[2])} cupons<br/>${money(p.data[3])}`
+        `${weekdayNames[p.data[1]]} · ${p.data[0]}h<br/>${number(p.data[2])} cupons<br/>${money(p.data[3])}`
     },
+
     grid: {
       left: 42,
       right: 18,
       top: 18,
       bottom: 35
     },
+
     xAxis: {
       type: 'category',
-      data: Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0')),
-      splitArea: { show: true },
+      data: heatmapHours,
+      splitArea: {
+        show: true,
+        areaStyle: {
+          color: ['rgba(255,255,255,.015)', 'rgba(255,255,255,.025)']
+        }
+      },
       axisLabel: {
         color: '#aab8ae',
-        interval: 2
+        interval: 0
+      },
+      axisLine: {
+        lineStyle: {
+          color: '#34443b'
+        }
       }
     },
+
     yAxis: {
       type: 'category',
       data: weekdayNames,
-      axisLabel: { color: '#aab8ae' }
+      axisLabel: {
+        color: '#aab8ae'
+      },
+      axisLine: {
+        lineStyle: {
+          color: '#34443b'
+        }
+      }
     },
+
     visualMap: {
+      type: 'continuous',
       min: 0,
-      max: Math.max(1, ...heatmapData.map(x => Number(x.coupons))),
+      max: heatmapMax,
       calculable: false,
       orient: 'horizontal',
       left: 'center',
       bottom: 0,
       show: false,
+
+      // Pouco movimento = verde claro.
+      // Muito movimento = verde escuro.
       inRange: {
-        color: ['#203229', '#39734d', '#79c99a']
+        color: [
+          '#e1f3e5',
+          '#c9e9d0',
+          '#a9dbb6',
+          '#85cb99',
+          '#65b77e',
+          '#469b63',
+          '#307e4c',
+          '#205f39',
+          '#124528'
+        ]
+      },
+
+      outOfRange: {
+        color: ['#e1f3e5']
       }
     },
+
     series: [{
       type: 'heatmap',
-      data: heatmapData.map(x => [
-        x.hour,
-        x.weekday,
-        x.coupons,
-        x.revenue
+
+      data: heatmapVisibleData.map(item => [
+        String(item.hour).padStart(2, '0'),
+        item.weekday,
+        Number(item.coupons),
+        Number(item.revenue)
       ]),
-      label: { show: false },
+
+      label: {
+        show: false
+      },
+
+      itemStyle: {
+        borderColor: '#17231c',
+        borderWidth: 2,
+        borderRadius: 3
+      },
+
       emphasis: {
         itemStyle: {
           borderColor: '#edf4ef',
-          borderWidth: 1
+          borderWidth: 2,
+          shadowBlur: 8,
+          shadowColor: 'rgba(0,0,0,.25)'
         }
       }
     }]
-  }), [heatmapData]);
+  }), [heatmapVisibleData, heatmapMax]);
 
   const onGroupClick = (p: any) => {
     const found = (data?.groupSales || []).find(g => g.name === p?.name);
@@ -1022,8 +1103,8 @@ export default function App() {
           <div>
             <h2>Movimento por dia e horário</h2>
             <p>
-              Selecione uma célula para filtrar todo o dashboard.
-              O maior movimento considera a quantidade de cupons.
+              Horários das 07h às 20h. Selecione uma célula para filtrar todo o dashboard.
+              Quanto mais escuro o verde, maior o movimento.
             </p>
           </div>
           <span className="tag">HORÁRIOS</span>
@@ -1031,6 +1112,7 @@ export default function App() {
 
         <ReactECharts
           option={heatmapOption}
+          notMerge={true}
           onEvents={{ click: onHeatmapClick }}
           style={{ height: 300 }}
         />
