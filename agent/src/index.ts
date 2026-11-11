@@ -1,4 +1,3 @@
-
 import 'dotenv/config';
 import mysql from 'mysql2/promise';
 
@@ -21,7 +20,7 @@ type Filters = {
   payment?: string;
 };
 
-const api = (process.env.API_URL || 'http://localhost:3001').replace(/\/$/, '');
+const api = (process.env.BACKEND_URL || 'https://mercado-central-bi.vercel.app').replace(/\/$/, '');
 const token = process.env.AGENT_TOKEN || '';
 const pollMs = Math.max(500, Number(process.env.AGENT_POLL_MS || 1500));
 
@@ -203,7 +202,6 @@ async function queryStore(s: StoreConfig, f: Filters) {
     );
 
     // 3. FATURAMENTO MENSAL
-    // Todas as lojas utilizam o índice de data.
 
     const year = String(f.to).slice(0, 4);
 
@@ -729,7 +727,8 @@ async function postResult(
   });
 
   if (!r.ok) {
-    throw new Error(`Falha ao devolver resultado: ${r.status}`);
+    const detail = await r.text();
+    throw new Error(`Falha ao devolver resultado: ${r.status}: ${detail}`);
   }
 }
 
@@ -752,7 +751,11 @@ async function poll() {
     });
 
     if (!r.ok) {
-      throw new Error(`Backend respondeu ${r.status}`);
+      const detail = await r.text();
+
+      throw new Error(
+        `Backend respondeu ${r.status}: ${detail}`
+      );
     }
 
     const body = await r.json() as { job: any };
