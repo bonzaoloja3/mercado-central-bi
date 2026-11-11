@@ -1,4 +1,3 @@
-
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 
@@ -235,7 +234,7 @@ export default function App() {
     yAxis: {
       type: 'value',
       axisLabel: {
-        show: false
+        color: '#aab8ae'
       },
       splitLine: { lineStyle: { color: '#26352d' } }
     },
@@ -1216,13 +1215,13 @@ function Gauge({
   greenStart: number;
   subtitle: string;
 }) {
-  // Mantém o valor real para exibição, mesmo quando ultrapassa a escala.
+  // Valor real que será exibido abaixo do velocímetro.
   const displayedValue = Math.max(
     0,
     Number.isFinite(value) ? value : 0
   );
 
-  // Somente o ponteiro fica limitado ao máximo do velocímetro.
+  // Limita somente a posição do ponteiro à escala.
   const needleValue = Math.min(max, displayedValue);
 
   const zone =
@@ -1294,15 +1293,12 @@ function Gauge({
         show: false
       },
 
+      // Esconde os números 0%, 85% e 100% da escala.
       axisLabel: {
-        distance: 24,
-        color: '#aab8ae',
-        fontSize: 10,
-        formatter: (v: number) =>
-          v === 0 || v === max ? `${v}%` : ''
+        show: false
       },
 
-      // Remove o número que aparecia dentro do velocímetro.
+      // Esconde o percentual que aparecia dentro do velocímetro.
       detail: {
         show: false
       },
