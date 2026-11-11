@@ -1014,6 +1014,19 @@ export default function App() {
         </div>
       </section>
 
+      <section className="panel monthly-combined-panel">
+        <div className="panel-head">
+          <div>
+            <h2>Desempenho mensal comparativo</h2>
+            <p>Faturamento, média diária e markup ao longo dos 12 meses. Passe o mouse sobre a legenda para destacar cada indicador.</p>
+          </div>
+          <span className="tag">ANÁLISE ANUAL</span>
+        </div>
+        <ReactECharts option={monthlyCombinedOption} notMerge={true}
+          lazyUpdate={true} style={{ height: 410, width: '100%' }} />
+      </section>
+
+
       <section className="panel products product-list-panel">
         <div className="panel-head">
           <div>
@@ -1061,18 +1074,6 @@ export default function App() {
             </tbody>
           </table>
         </div>
-      </section>
-
-      <section className="panel monthly-combined-panel">
-        <div className="panel-head">
-          <div>
-            <h2>Desempenho mensal comparativo</h2>
-            <p>Faturamento, média diária e markup ao longo dos 12 meses. Passe o mouse sobre a legenda para destacar cada indicador.</p>
-          </div>
-          <span className="tag">ANÁLISE ANUAL</span>
-        </div>
-        <ReactECharts option={monthlyCombinedOption} notMerge={true}
-          lazyUpdate={true} style={{ height: 410, width: '100%' }} />
       </section>
 
       <footer>
