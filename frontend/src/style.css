@@ -7,56 +7,36 @@
 @media(max-width:1150px){.gauges{grid-template-columns:1fr 1fr}.store-panel{grid-column:1/-1}.monthly-row{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.gauges,.monthly-row{grid-template-columns:1fr}.store-panel{grid-column:auto}.gauge-panel{min-height:275px}.store-panel .table-wrap{overflow-x:auto}.store-panel table{min-width:620px}}
 
-
-/* Ajustes finais: gráficos sem sobreposição e layout responsivo. */
-.panel{min-width:0;overflow:hidden}
-.panel .echarts-for-react{width:100%!important;max-width:100%;min-width:0}
-.panel canvas{max-width:100%}
-.charts,.gauges{min-width:0}
-.gauge-panel .echarts-for-react{max-width:100%}
-.store-panel .table-wrap{max-width:100%}
-.interactive-row{cursor:pointer;transition:background .18s ease,transform .18s ease}
-.interactive-row:hover{background:rgba(121,201,154,.10)}
+/* Novos componentes do dashboard: heatmap, indicadores e pagamentos expansíveis. */
+.panel.wide{min-width:0}.panel.products{min-width:0}.panel .echarts-for-react{max-width:100%;min-width:0}.panel canvas{max-width:100%}
+.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+.panel button.clear{border:1px solid #405447;background:transparent;color:#a9b9ae;padding:7px 11px;border-radius:8px;font:600 10px 'DM Sans';cursor:pointer;margin-top:10px}
+.panel button.clear:hover{border-color:#79c99a;color:#dff2e4;background:rgba(121,201,154,.08)}
+.interactive-row td{transition:background .18s ease}.interactive-row:hover td{background:rgba(121,201,154,.08)}
+.panel table tr td:first-child{min-width:150px}
+.panel-head .tag{white-space:nowrap}
+@media(max-width:1150px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.gauges{grid-template-columns:1fr 1fr}.store-panel{grid-column:1/-1}}
 @media(max-width:760px){
   .shell{padding:18px 12px 22px}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  .kpi{padding:14px 12px}
+  .kpi strong{font-size:18px}
   .gauges,.monthly-row,.charts{grid-template-columns:minmax(0,1fr);gap:12px}
-  .gauge-panel{min-height:0}
-  .gauge-panel .echarts-for-react{height:190px!important}
-  .monthly-row .echarts-for-react{height:300px!important}
-  .charts .echarts-for-react{height:320px!important}
+  .store-panel{grid-column:auto}
   .panel{padding:13px;border-radius:11px}
-  .panel-head{gap:8px}
+  .panel-head{gap:8px;align-items:flex-start}
   .panel-head p{line-height:1.45}
+  .panel .echarts-for-react{width:100%!important}
+  .store-panel .table-wrap{overflow-x:auto}
   .store-panel table{min-width:620px}
+  .sale-summary{grid-template-columns:1fr 1fr}
 }
 @media(max-width:420px){
   .shell{padding-left:9px;padding-right:9px}
-  .panel{padding:11px}
+  .panel{padding:11px 9px}
   .panel h2{font-size:13px}
   .panel-head p{font-size:10px}
-  .charts .echarts-for-react{height:340px!important}
-  .monthly-row .echarts-for-react{height:320px!important}
-  .kpis{grid-template-columns:1fr 1fr}
-}
-
-/* Ajustes finais dos gráficos de pizza e telas pequenas */
-.charts .panel{min-width:0;overflow:hidden}
-.charts .echarts-for-react{width:100%!important;max-width:100%;min-width:0}
-.charts canvas{max-width:100%}
-@media(max-width:760px){
-  .charts,.monthly-row{grid-template-columns:minmax(0,1fr);gap:12px}
-  .charts .panel{width:100%;min-width:0;padding:13px 10px}
+  .kpi span{font-size:10px}
+  .kpi strong{font-size:16px}
   .charts .echarts-for-react{height:340px!important}
 }
-@media(max-width:420px){
-  .charts .panel{padding:11px 7px}
-  .charts .echarts-for-react{height:360px!important}
-}
-
-/* Filtros ativos nos gráficos */
-.panel-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.filter-chip{display:inline-flex;align-items:center;gap:9px;max-width:230px;padding:6px 10px;border:1px solid #65b77e;border-radius:20px;background:rgba(101,183,126,.12);color:#ccebd5;font:600 10px 'DM Sans';cursor:pointer}
-.filter-chip b{font-size:16px;line-height:10px;color:#a8dcb6}
-.filter-chip:hover{background:rgba(101,183,126,.24);border-color:#a8dcb6}
-.panel-head>.filter-chip{flex-shrink:0}
-@media(max-width:650px){.panel-head{align-items:flex-start}.panel-actions{gap:5px}.filter-chip{font-size:9px;max-width:170px}.panel-head>.filter-chip{max-width:145px}}
