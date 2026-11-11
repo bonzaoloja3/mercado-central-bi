@@ -235,8 +235,7 @@ export default function App() {
     yAxis: {
       type: 'value',
       axisLabel: {
-        color: '#aab8ae',
-        formatter: (v: number) => `R$${v}`
+        show: false
       },
       splitLine: { lineStyle: { color: '#26352d' } }
     },
