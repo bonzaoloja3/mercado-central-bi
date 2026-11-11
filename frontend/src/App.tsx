@@ -31,7 +31,7 @@ type MonthSale = {
   month: string;
   revenue: number;
   average_daily?: number;
-  markup?: number | null;
+  markup?: number;
 };
 
 type ProductSale = {
@@ -115,14 +115,22 @@ const money = (v: number | string) =>
     currency: 'BRL'
   });
 
-const number = (v: number) =>
-  Number(v || 0).toLocaleString('pt-BR');
-
-const percent = (v: number) =>
-  `${Number(v || 0).toFixed(2).replace('.', ',')}%`;
+const number = (v: number) => Number(v || 0).toLocaleString('pt-BR');
+const percent = (v: number) => `${Number(v || 0).toFixed(2).replace('.', ',')}%`;
 
 const dateLocal = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// input[type=date] trabalha internamente com AAAA-MM-DD.
+// Normaliza também navegadores móveis que eventualmente retornem DD/MM/AAAA.
+const normalizeDateInput = (value: string) => {
+  const v = String(value || '').trim();
+  const iso = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const br = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  return v;
+};
 
 const today = dateLocal(new Date());
 const week = dateLocal(new Date(Date.now() - 6 * 86400000));
@@ -137,11 +145,6 @@ const initialFilters: Filters = {
   weekday: '',
   hour: ''
 };
-
-const monthNames = [
-  'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
-  'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
-];
 
 function interpolateGreen(start: string, end: string, steps: number) {
   const hexToRgb = (hex: string) => ({
@@ -185,6 +188,8 @@ function createHeatmapPieces(step: number, limit: number) {
 const heatmapAllStoresPieces = createHeatmapPieces(10, 200);
 const heatmapSingleStorePieces = createHeatmapPieces(5, 100);
 
+const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
 export default function App() {
   const [filters, setFilters] = useState<Filters>(initialFilters);
   const [data, setData] = useState<Dashboard | null>(null);
@@ -192,21 +197,25 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
   const [expandedPayment, setExpandedPayment] = useState<string | null>(null);
-
-  const [productSort, setProductSort] = useState<{
-    key: ProductSortKey;
-    direction: 'asc' | 'desc';
-  }>({
+  const [productSort, setProductSort] = useState<{ key: ProductSortKey; direction: 'asc' | 'desc' }>({
     key: 'revenue',
     direction: 'desc'
   });
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches);
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 760px)');
+    const sync = () => setIsMobile(media.matches);
+    sync();
+    media.addEventListener?.('change', sync);
+    return () => media.removeEventListener?.('change', sync);
+  }, []);
 
   const requestId = useRef(0);
 
   const load = useCallback(async (manual = false, override?: Filters) => {
     const current = override || filters;
     const id = ++requestId.current;
-
     setLoading(true);
     setError('');
 
@@ -227,22 +236,13 @@ export default function App() {
       const response = await fetch(`${API}/api/dashboard?${q.toString()}`);
       const result = await response.json();
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Não foi possível consultar as lojas.');
-      }
-
+      if (!response.ok) throw new Error(result.error || 'Não foi possível consultar as lojas.');
       if (id !== requestId.current) return;
 
       setData(result);
-      setLastUpdated(
-        result.cache?.updatedAt ||
-        result.generatedAt ||
-        new Date().toISOString()
-      );
+      setLastUpdated(result.cache?.updatedAt || result.generatedAt || new Date().toISOString());
     } catch (e: any) {
-      if (id === requestId.current) {
-        setError(e.message || 'Falha de conexão com o backend.');
-      }
+      if (id === requestId.current) setError(e.message || 'Falha de conexão com o backend.');
     } finally {
       if (id === requestId.current) setLoading(false);
     }
@@ -252,10 +252,7 @@ export default function App() {
     void load(false);
   }, [load]);
 
-  const update = (patch: Partial<Filters>) => {
-    setFilters(old => ({ ...old, ...patch }));
-  };
-
+  const update = (patch: Partial<Filters>) => setFilters(old => ({ ...old, ...patch }));
   const resetFilters = () => setFilters(initialFilters);
 
   const dailyOption = useMemo(() => ({
@@ -267,7 +264,7 @@ export default function App() {
       textStyle: { color: '#edf4ef' },
       valueFormatter: (v: any) => money(v)
     },
-    grid: { left: 15, right: 20, top: 24, bottom: 35, containLabel: true },
+    grid: { left: 12, right: 18, top: 24, bottom: 34, containLabel: true },
     xAxis: {
       type: 'category',
       data: data?.daily.map(x => x.day) || [],
@@ -293,35 +290,25 @@ export default function App() {
 
   const paymentOptions = useMemo(() => {
     const opts = new Map<string, string>();
-
     for (const p of data?.payments || []) {
       opts.set(p.method, p.method);
       if (p.brand) opts.set(p.brand, `${p.brand} · ${p.method}`);
     }
-
     return [...opts];
   }, [data]);
 
   const paymentTotals = useMemo(() => {
     const totals = new Map<string, number>();
-
     for (const p of data?.payments || []) {
-      totals.set(
-        p.method,
-        (totals.get(p.method) || 0) + Number(p.amount)
-      );
+      totals.set(p.method, (totals.get(p.method) || 0) + Number(p.amount));
     }
-
     return [...totals].map(([name, value]) => ({ name, value }));
   }, [data]);
 
   const paymentOption = useMemo(() => {
     const total = paymentTotals.reduce((sum, p) => sum + Number(p.value), 0);
-
     const percentage = (value: number) =>
-      total > 0
-        ? `${((value / total) * 100).toFixed(1).replace('.', ',')}%`
-        : '0%';
+      total > 0 ? `${((value / total) * 100).toFixed(1).replace('.', ',')}%` : '0%';
 
     return {
       animationDuration: 500,
@@ -388,17 +375,10 @@ export default function App() {
   }, [paymentTotals]);
 
   const groupOption = useMemo(() => {
-    const groupData = (data?.groupSales || []).map(g => ({
-      name: g.name,
-      value: Number(g.revenue)
-    }));
-
+    const groupData = (data?.groupSales || []).map(g => ({ name: g.name, value: Number(g.revenue) }));
     const total = groupData.reduce((sum, g) => sum + g.value, 0);
-
     const percentage = (value: number) =>
-      total > 0
-        ? `${((value / total) * 100).toFixed(1).replace('.', ',')}%`
-        : '0%';
+      total > 0 ? `${((value / total) * 100).toFixed(1).replace('.', ',')}%` : '0%';
 
     return {
       animationDuration: 600,
@@ -437,13 +417,9 @@ export default function App() {
             show: true,
             color: '#edf4ef',
             fontWeight: 700,
-            formatter: (p: any) =>
-              `${p.percent.toFixed(1).replace('.', ',')}%`
+            formatter: (p: any) => `${p.percent.toFixed(1).replace('.', ',')}%`
           },
-          itemStyle: {
-            shadowBlur: 18,
-            shadowColor: 'rgba(0,0,0,.35)'
-          }
+          itemStyle: { shadowBlur: 18, shadowColor: 'rgba(0,0,0,.35)' }
         },
         data: groupData
       }],
@@ -477,11 +453,8 @@ export default function App() {
       textStyle: { color: '#edf4ef' },
       valueFormatter: (v: any) => money(v)
     },
-    legend: {
-      top: 0,
-      textStyle: { color: '#aab8ae' }
-    },
-    grid: { left: 15, right: 20, top: 38, bottom: 30, containLabel: true },
+    legend: { top: 0, textStyle: { color: '#aab8ae' } },
+    grid: { left: 12, right: 18, top: 38, bottom: 28, containLabel: true },
     xAxis: {
       type: 'category',
       data: (data?.monthly || []).map(m => m.month),
@@ -490,10 +463,7 @@ export default function App() {
     },
     yAxis: {
       type: 'value',
-      axisLabel: {
-        color: '#aab8ae',
-        formatter: (v: number) => `R$${number(v)}`
-      },
+      axisLabel: { color: '#aab8ae', formatter: (v: number) => `R$${v}` },
       splitLine: { lineStyle: { color: '#26352d' } }
     },
     series: [{
@@ -506,14 +476,13 @@ export default function App() {
     }]
   }), [data]);
 
+  // Garante Jan-Dez do ano selecionado; meses ausentes são exibidos como zero, sem estimativas.
   const annualMonths = useMemo(() => {
     const year = filters.to.slice(0, 4) || String(new Date().getFullYear());
     const monthlyMap = new Map((data?.monthly || []).map(m => [m.month, m]));
-
     return monthNames.map((label, index) => {
       const key = `${year}-${String(index + 1).padStart(2, '0')}`;
       const month = monthlyMap.get(key);
-
       return {
         key,
         label,
@@ -535,12 +504,8 @@ export default function App() {
       textStyle: { color: '#edf4ef' },
       formatter: (params: any[]) => {
         if (!params?.length) return '';
-
-        const index = params[0].dataIndex;
-        const month = annualMonths[index];
-
+        const month = annualMonths[params[0].dataIndex];
         if (!month) return '';
-
         return [
           `<strong>${month.label}</strong>`,
           `<span style="color:#529ee0">●</span> Valor Total: <strong>${money(month.revenue)}</strong>`,
@@ -550,76 +515,40 @@ export default function App() {
       }
     },
     legend: {
-      type: 'plain',
-      top: 4,
+      top: 5,
       left: 'center',
-      itemGap: 18,
-      itemWidth: 12,
-      itemHeight: 12,
-      textStyle: { color: '#c0ccc3', fontSize: 11 },
+      itemGap: 20,
+      textStyle: { color: '#aab8ae', fontSize: 11 },
       data: ['Valor Total', 'Valor Médio Diário', 'Markup'],
-      selectedMode: true
+      emphasis: { selectorLabel: { color: '#fff' } }
     },
-    grid: {
-      left: 66,
-      right: 66,
-      top: 62,
-      bottom: 48,
-      containLabel: true
-    },
+    grid: { left: 76, right: 76, top: 55, bottom: 42, containLabel: false },
     xAxis: {
       type: 'category',
       data: annualMonths.map(m => m.label),
       axisLine: { lineStyle: { color: '#34443b' } },
-      axisTick: { alignWithLabel: true },
-      axisLabel: {
-        color: '#aab8ae',
-        interval: 0,
-        fontSize: 10
-      }
+      axisLabel: { color: '#aab8ae' }
     },
     yAxis: [
       {
         type: 'value',
         name: 'Faturamento',
-        nameLocation: 'middle',
-        nameGap: 48,
-        nameTextStyle: { color: '#529ee0', fontSize: 10 },
-        axisLabel: {
-          color: '#aab8ae',
-          fontSize: 10,
-          formatter: (v: number) => `R$${number(v)}`
-        },
+        nameTextStyle: { color: '#529ee0' },
+        axisLabel: { color: '#aab8ae', formatter: (v: number) => `R$${number(v)}` },
         splitLine: { lineStyle: { color: '#26352d' } }
       },
       {
         type: 'value',
         name: 'Média diária',
-        position: 'right',
-        nameLocation: 'middle',
-        nameGap: 45,
-        nameTextStyle: { color: '#a982c7', fontSize: 10 },
-        axisLabel: {
-          color: '#aab8ae',
-          fontSize: 10,
-          formatter: (v: number) => `R$${number(v)}`
-        },
+        nameTextStyle: { color: '#a982c7' },
+        axisLabel: { color: '#aab8ae', formatter: (v: number) => `R$${number(v)}` },
         splitLine: { show: false }
       },
       {
         type: 'value',
-        min: 0,
-        position: 'right',
-        offset: 55,
         name: 'Markup',
-        nameLocation: 'middle',
-        nameGap: 35,
-        nameTextStyle: { color: '#ef8585', fontSize: 10 },
-        axisLabel: {
-          color: '#ef8585',
-          fontSize: 10,
-          formatter: (v: number) => `${v}%`
-        },
+        nameTextStyle: { color: '#ef8585' },
+        axisLabel: { color: '#aab8ae', formatter: (v: number) => `${v}%` },
         splitLine: { show: false }
       }
     ],
@@ -628,32 +557,19 @@ export default function App() {
         name: 'Valor Total',
         type: 'bar',
         yAxisIndex: 0,
-        barMaxWidth: 22,
-        barGap: '15%',
+        barMaxWidth: 25,
         data: annualMonths.map(m => m.revenue),
-        itemStyle: {
-          color: '#529ee0',
-          borderRadius: [4, 4, 0, 0]
-        },
-        emphasis: {
-          focus: 'series',
-          itemStyle: { shadowBlur: 10, shadowColor: 'rgba(82,158,224,.35)' }
-        }
+        itemStyle: { color: '#529ee0', borderRadius: [4, 4, 0, 0] },
+        emphasis: { focus: 'series' }
       },
       {
         name: 'Valor Médio Diário',
         type: 'bar',
         yAxisIndex: 1,
-        barMaxWidth: 22,
+        barMaxWidth: 25,
         data: annualMonths.map(m => m.averageDaily),
-        itemStyle: {
-          color: '#a982c7',
-          borderRadius: [4, 4, 0, 0]
-        },
-        emphasis: {
-          focus: 'series',
-          itemStyle: { shadowBlur: 10, shadowColor: 'rgba(169,130,199,.35)' }
-        }
+        itemStyle: { color: '#a982c7', borderRadius: [4, 4, 0, 0] },
+        emphasis: { focus: 'series' }
       },
       {
         name: 'Markup',
@@ -665,48 +581,60 @@ export default function App() {
         connectNulls: false,
         data: annualMonths.map(m => m.markup),
         lineStyle: { color: '#ef8585', width: 2.5 },
-        itemStyle: {
-          color: '#ef8585',
-          borderColor: '#fff',
-          borderWidth: 1
-        },
-        emphasis: {
-          focus: 'series',
-          scale: 1.5
-        }
+        itemStyle: { color: '#ef8585', borderColor: '#fff', borderWidth: 1 },
+        emphasis: { focus: 'series', scale: 1.4 }
       }
     ]
   }), [annualMonths]);
+
+  // Em telas pequenas, as três séries viram linhas. Os eixos ficam
+  // independentes e sem rótulos para evitar a sobreposição de escalas;
+  // os valores exatos continuam disponíveis no tooltip.
+  const annualChartOption = useMemo(() => {
+    if (!isMobile) return monthlyCombinedOption;
+    return {
+      ...monthlyCombinedOption,
+      grid: { left: 12, right: 12, top: 66, bottom: 48, containLabel: true },
+      legend: { ...monthlyCombinedOption.legend, top: 4, itemGap: 10, textStyle: { color: '#aab8ae', fontSize: 10 } },
+      xAxis: {
+        ...monthlyCombinedOption.xAxis,
+        axisLabel: { color: '#aab8ae', fontSize: 9, interval: 0, rotate: 35, margin: 12 }
+      },
+      yAxis: (monthlyCombinedOption.yAxis as any[]).map(axis => ({
+        ...axis, show: false, name: '', axisLabel: { show: false }, axisLine: { show: false },
+        splitLine: { show: false }
+      })),
+      series: (monthlyCombinedOption.series as any[]).map(series => ({
+        ...series,
+        type: 'line',
+        smooth: true,
+        showSymbol: true,
+        symbol: 'circle',
+        symbolSize: 5,
+        barMaxWidth: undefined,
+        itemStyle: { color: series.name === 'Valor Total' ? '#529ee0' : series.name === 'Valor Médio Diário' ? '#a982c7' : '#ef8585' },
+        lineStyle: { color: series.name === 'Valor Total' ? '#529ee0' : series.name === 'Valor Médio Diário' ? '#a982c7' : '#ef8585', width: 2.5 }
+      }))
+    };
+  }, [isMobile, monthlyCombinedOption]);
 
   const onDailyClick = (p: any) => {
     if (p?.name) update({ from: p.name, to: p.name });
   };
 
   const onPaymentClick = (p: any) => {
-    if (p?.name) {
-      update({
-        payment: filters.payment === p.name ? '' : p.name
-      });
-    }
+    if (p?.name) update({ payment: filters.payment === p.name ? '' : p.name });
   };
 
   const onHeatmapClick = (p: any) => {
     const v = p?.data;
-
     if (Array.isArray(v) && v.length >= 2) {
-      update({
-        hour: String(v[0]).replace(/^0/, ''),
-        weekday: String(v[1])
-      });
+      update({ hour: String(v[0]).replace(/^0/, ''), weekday: String(v[1]) });
     }
   };
 
   const weekdayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-  const heatmapHours = Array.from(
-    { length: 14 },
-    (_, i) => String(i + 7).padStart(2, '0')
-  );
-
+  const heatmapHours = Array.from({ length: 14 }, (_, i) => String(i + 7).padStart(2, '0'));
   const heatmapVisibleData = (data?.heatmap || []).filter(item => {
     const hour = Number(item.hour);
     return hour >= 7 && hour <= 20;
@@ -728,9 +656,7 @@ export default function App() {
       data: heatmapHours,
       splitArea: {
         show: true,
-        areaStyle: {
-          color: ['rgba(255,255,255,.015)', 'rgba(255,255,255,.025)']
-        }
+        areaStyle: { color: ['rgba(255,255,255,.015)', 'rgba(255,255,255,.025)'] }
       },
       axisLabel: { color: '#aab8ae', interval: 0 },
       axisLine: { lineStyle: { color: '#34443b' } }
@@ -748,9 +674,7 @@ export default function App() {
       left: 'center',
       bottom: 0,
       show: false,
-      pieces: filters.store === '0'
-        ? heatmapAllStoresPieces
-        : heatmapSingleStorePieces
+      pieces: filters.store === '0' ? heatmapAllStoresPieces : heatmapSingleStorePieces
     },
     series: [{
       type: 'heatmap',
@@ -761,11 +685,7 @@ export default function App() {
         Number(item.revenue)
       ]),
       label: { show: false },
-      itemStyle: {
-        borderColor: '#17231c',
-        borderWidth: 2,
-        borderRadius: 3
-      },
+      itemStyle: { borderColor: '#17231c', borderWidth: 2, borderRadius: 3 },
       emphasis: {
         itemStyle: {
           borderColor: '#edf4ef',
@@ -779,16 +699,10 @@ export default function App() {
 
   const onGroupClick = (p: any) => {
     const found = (data?.groupSales || []).find(g => g.name === p?.name);
-
-    if (found) {
-      update({
-        group: filters.group === found.code ? '' : found.code
-      });
-    }
+    if (found) update({ group: filters.group === found.code ? '' : found.code });
   };
 
   const k = data?.kpis;
-
   const updatedLabel = lastUpdated
     ? new Date(lastUpdated).toLocaleTimeString('pt-BR', {
         hour: '2-digit',
@@ -798,21 +712,18 @@ export default function App() {
     : '—';
 
   const markupValue = Number(
-    k?.markup ??
+    (k as any)?.markup ??
     ((Number(k?.gross_profit || 0) / Math.max(1, Number(k?.cost || 0))) * 100)
   );
-
-  const markdownValue = Number(k?.markdown ?? 0);
-
+  const markdownValue = Number((k as any)?.markdown ?? 0);
   const marginValue = Number(
-    k?.gross_margin ??
+    (k as any)?.gross_margin ??
     (Number(k?.revenue || 0)
       ? Number(k?.gross_profit || 0) / Number(k?.revenue || 1) * 100
       : 0)
   );
-
   const costPercent = Number(
-    k?.cost_percentage ??
+    (k as any)?.cost_percentage ??
     (Number(k?.revenue || 0)
       ? Number(k?.cost || 0) / Number(k?.revenue || 1) * 100
       : 0)
@@ -836,10 +747,7 @@ export default function App() {
 
     const valueFor = (p: ProductSale): string | number | null => {
       const profit = Number(p.revenue || 0) - Number(p.cost || 0);
-      const markup = Number(p.cost || 0) > 0
-        ? profit / Number(p.cost) * 100
-        : 0;
-
+      const markup = Number(p.cost || 0) > 0 ? profit / Number(p.cost) * 100 : 0;
       switch (productSort.key) {
         case 'product': return p.product || '';
         case 'quantity': return Number(p.quantity || 0);
@@ -847,23 +755,19 @@ export default function App() {
         case 'cost': return Number(p.cost || 0);
         case 'profit': return profit;
         case 'markup': return markup;
-        case 'markdown':
-          return p.markdown == null ? null : Number(p.markdown);
+        case 'markdown': return p.markdown == null ? null : Number(p.markdown);
       }
     };
 
     products.sort((a, b) => {
       const av = valueFor(a);
       const bv = valueFor(b);
-
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
-
       const result = typeof av === 'string'
         ? av.localeCompare(String(bv), 'pt-BR', { sensitivity: 'base' })
         : Number(av) - Number(bv);
-
       return productSort.direction === 'asc' ? result : -result;
     });
 
@@ -873,10 +777,7 @@ export default function App() {
   const changeProductSort = (key: ProductSortKey) => {
     setProductSort(current => ({
       key,
-      direction:
-        current.key === key && current.direction === 'asc'
-          ? 'desc'
-          : 'asc'
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
     }));
   };
 
@@ -886,20 +787,11 @@ export default function App() {
       : '↕';
 
   const productHeading = (label: string, key: ProductSortKey) => (
-    <th
-      aria-sort={
-        productSort.key === key
-          ? productSort.direction === 'asc' ? 'ascending' : 'descending'
-          : 'none'
-      }
-    >
-      <button
-        type="button"
-        className="sort-button"
-        onClick={() => changeProductSort(key)}
-      >
-        {label}
-        <span>{sortArrow(key)}</span>
+    <th aria-sort={productSort.key === key
+      ? productSort.direction === 'asc' ? 'ascending' : 'descending'
+      : 'none'}>
+      <button type="button" className="sort-button" onClick={() => changeProductSort(key)}>
+        {label}<span>{sortArrow(key)}</span>
       </button>
     </th>
   );
@@ -914,7 +806,6 @@ export default function App() {
             <span>INTELLIGENCE · BUSINESS</span>
           </div>
         </div>
-
         <div className="status">
           <i />
           {data?.source === 'demo' ? 'Modo demonstração' : 'Consulta às lojas'}
@@ -925,16 +816,9 @@ export default function App() {
         <div>
           <p className="eyebrow">VISÃO GERAL</p>
           <h1>Inteligência de vendas</h1>
-          <p className="sub">
-            Acompanhe o desempenho das três lojas em um só lugar.
-          </p>
+          <p className="sub">Acompanhe o desempenho das três lojas em um só lugar.</p>
         </div>
-
-        <button
-          className="refresh"
-          onClick={() => void load(true)}
-          disabled={loading}
-        >
+        <button className="refresh" onClick={() => void load(true)} disabled={loading}>
           ↻ {loading ? 'Consultando...' : 'Atualizar agora'}
         </button>
       </section>
@@ -942,65 +826,41 @@ export default function App() {
       <section className="filters">
         <label>
           Data inicial
-          <input
-            type="date"
-            value={filters.from}
-            max={filters.to}
-            onChange={e => update({ from: e.target.value })}
-          />
+          <input type="date" lang="pt-BR" value={normalizeDateInput(filters.from)} max={normalizeDateInput(filters.to)}
+            onChange={e => update({ from: normalizeDateInput(e.currentTarget.value) })} />
         </label>
-
         <label>
           Data final
-          <input
-            type="date"
-            value={filters.to}
-            min={filters.from}
-            onChange={e => update({ to: e.target.value })}
-          />
+          <input type="date" lang="pt-BR" value={normalizeDateInput(filters.to)} min={normalizeDateInput(filters.from)}
+            onChange={e => update({ to: normalizeDateInput(e.currentTarget.value) })} />
         </label>
-
         <label>
           Unidade
-          <select
-            value={filters.store}
-            onChange={e => update({ store: e.target.value })}
-          >
+          <select value={filters.store} onChange={e => update({ store: e.target.value })}>
             <option value="0">Todas as lojas</option>
             <option value="1">Loja 1</option>
             <option value="2">Loja 2</option>
             <option value="3">Loja 3</option>
           </select>
         </label>
-
         <label>
           Grupo
-          <select
-            value={filters.group}
-            onChange={e => update({ group: e.target.value })}
-          >
+          <select value={filters.group} onChange={e => update({ group: e.target.value })}>
             <option value="">Todos os grupos</option>
             {(data?.groups || []).map(g => (
               <option key={g.code} value={g.code}>{g.name}</option>
             ))}
           </select>
         </label>
-
         <label>
           Produto
-          <input
-            value={filters.product}
+          <input value={filters.product}
             onChange={e => update({ product: e.target.value })}
-            placeholder="Nome, código ou barras"
-          />
+            placeholder="Nome, código ou barras" />
         </label>
-
         <label>
           Pagamento
-          <select
-            value={filters.payment}
-            onChange={e => update({ payment: e.target.value })}
-          >
+          <select value={filters.payment} onChange={e => update({ payment: e.target.value })}>
             <option value="">Todas as formas</option>
             {paymentOptions.map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
@@ -1009,10 +869,7 @@ export default function App() {
         </label>
 
         {(filters.weekday !== '' || filters.hour !== '') && (
-          <button
-            className="clear"
-            onClick={() => update({ weekday: '', hour: '' })}
-          >
+          <button className="clear" onClick={() => update({ weekday: '', hour: '' })}>
             Remover filtro de horário
           </button>
         )}
@@ -1020,10 +877,7 @@ export default function App() {
         <button onClick={() => void load(false)} disabled={loading}>
           {loading ? 'Carregando...' : 'Consultar'}
         </button>
-
-        <button className="clear" onClick={resetFilters}>
-          Limpar filtros
-        </button>
+        <button className="clear" onClick={resetFilters}>Limpar filtros</button>
       </section>
 
       <div className="meta-line">
@@ -1049,8 +903,8 @@ export default function App() {
         <Kpi label="Ticket médio" value={money(k?.average_ticket || 0)} detail="Faturamento ÷ cupons" />
         <Kpi label="Custo dos produtos" value={money(k?.cost || 0)} detail="Itens não cancelados" />
         <Kpi label="Lucro bruto estimado" value={money(k?.gross_profit || 0)} detail="Venda dos itens − custo" />
-        <Kpi label="Margem bruta" value={percent(marginValue)} detail="Lucro bruto ÷ faturamento" />
-        <Kpi label="Custo percentual" value={percent(costPercent)} detail="Custo ÷ faturamento" />
+        <Kpi label="Margem bruta" value={`${marginValue.toFixed(2).replace('.', ',')}%`} detail="Lucro bruto ÷ faturamento" />
+        <Kpi label="Custo percentual" value={`${costPercent.toFixed(2).replace('.', ',')}%`} detail="Custo ÷ faturamento" />
         <Kpi
           label="Itens cancelados"
           value={money(cancelled?.amount || 0)}
@@ -1059,23 +913,12 @@ export default function App() {
       </section>
 
       <section className="gauges">
-        <Gauge
-          title="Markdown"
-          value={markdownValue}
-          max={85}
-          yellowStart={21.25}
-          greenStart={42.5}
-          subtitle="Desconto médio sobre o preço original"
-        />
-
-        <Gauge
-          title="Markup"
-          value={markupValue}
-          max={100}
-          yellowStart={33}
-          greenStart={66}
-          subtitle="Margem de acréscimo sobre o custo"
-        />
+        <Gauge title="Markdown" value={markdownValue} max={85}
+          yellowStart={21.25} greenStart={42.5}
+          subtitle="Desconto médio sobre o preço original" />
+        <Gauge title="Markup" value={markupValue} max={100}
+          yellowStart={33} greenStart={66}
+          subtitle="Margem de acréscimo sobre o custo" />
 
         <article className="panel store-panel">
           <div className="panel-head">
@@ -1085,37 +928,22 @@ export default function App() {
             </div>
             <span className="tag">LOJAS</span>
           </div>
-
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Loja</th>
-                  <th>Ticket médio</th>
-                  <th>Venda total</th>
-                  <th>Quantidade de vendas</th>
+                  <th>Loja</th><th>Ticket médio</th><th>Venda total</th><th>Quantidade de vendas</th>
                 </tr>
               </thead>
               <tbody>
                 {storeSales.map(s => (
-                  <tr
-                    key={s.id}
-                    className="interactive-row"
-                    onClick={() => update({ store: String(s.id) })}
-                  >
-                    <td>{s.name}</td>
-                    <td>{money(s.average_ticket)}</td>
-                    <td>{money(s.revenue)}</td>
-                    <td>{number(s.coupons)}</td>
+                  <tr key={s.id} className="interactive-row" onClick={() => update({ store: String(s.id) })}>
+                    <td>{s.name}</td><td>{money(s.average_ticket)}</td>
+                    <td>{money(s.revenue)}</td><td>{number(s.coupons)}</td>
                   </tr>
                 ))}
-
                 {!storeSales.length && (
-                  <tr>
-                    <td colSpan={4} className="empty">
-                      Resumo por loja indisponível nesta consulta.
-                    </td>
-                  </tr>
+                  <tr><td colSpan={4} className="empty">Resumo por loja indisponível nesta consulta.</td></tr>
                 )}
               </tbody>
             </table>
@@ -1132,12 +960,7 @@ export default function App() {
             </div>
             <span className="tag">ANO</span>
           </div>
-
-          <ReactECharts
-            option={monthlyOption}
-            notMerge={true}
-            style={{ height: 285, width: '100%' }}
-          />
+          <ReactECharts option={monthlyOption} notMerge={true} style={{ height: 285 }} />
         </article>
 
         <article className="panel">
@@ -1147,13 +970,8 @@ export default function App() {
               <p>Clique em uma fatia para filtrar o grupo.</p>
             </div>
           </div>
-
-          <ReactECharts
-            option={groupOption}
-            notMerge={true}
-            onEvents={{ click: onGroupClick }}
-            style={{ height: 320, width: '100%' }}
-          />
+          <ReactECharts option={groupOption} notMerge={true}
+            onEvents={{ click: onGroupClick }} style={{ height: 320 }} />
         </article>
       </section>
 
@@ -1168,19 +986,10 @@ export default function App() {
           </div>
           <span className="tag">HORÁRIOS</span>
         </div>
-
-        <ReactECharts
-          option={heatmapOption}
-          notMerge={true}
-          onEvents={{ click: onHeatmapClick }}
-          style={{ height: 300, width: '100%' }}
-        />
-
+        <ReactECharts option={heatmapOption} notMerge={true}
+          onEvents={{ click: onHeatmapClick }} style={{ height: 300 }} />
         {filters.weekday !== '' && filters.hour !== '' && (
-          <button
-            className="clear"
-            onClick={() => update({ weekday: '', hour: '' })}
-          >
+          <button className="clear" onClick={() => update({ weekday: '', hour: '' })}>
             Limpar seleção: {weekdayNames[Number(filters.weekday)]} às {String(filters.hour).padStart(2, '0')}h
           </button>
         )}
@@ -1195,12 +1004,8 @@ export default function App() {
             </div>
             <span className="tag">VENDAS</span>
           </div>
-
-          <ReactECharts
-            option={dailyOption}
-            onEvents={{ click: onDailyClick }}
-            style={{ height: 300, width: '100%' }}
-          />
+          <ReactECharts option={dailyOption} onEvents={{ click: onDailyClick }}
+            style={{ height: 300 }} />
         </article>
 
         <article className="panel">
@@ -1210,13 +1015,8 @@ export default function App() {
               <p>Clique em uma fatia para filtrar.</p>
             </div>
           </div>
-
-          <ReactECharts
-            option={paymentOption}
-            notMerge={true}
-            onEvents={{ click: onPaymentClick }}
-            style={{ height: 340, width: '100%' }}
-          />
+          <ReactECharts option={paymentOption} notMerge={true}
+            onEvents={{ click: onPaymentClick }} style={{ height: 340 }} />
         </article>
       </section>
 
@@ -1230,17 +1030,11 @@ export default function App() {
             </p>
           </div>
         </div>
-
         <div className="table-wrap">
           <table>
             <thead>
-              <tr>
-                <th>Forma de pagamento</th>
-                <th>Valor registrado</th>
-                <th>Troco</th>
-              </tr>
+              <tr><th>Forma de pagamento</th><th>Valor registrado</th><th>Troco</th></tr>
             </thead>
-
             <tbody>
               {[...new Set((data?.payments || []).map(p => p.method))].map(method => {
                 const rows = (data?.payments || []).filter(p => p.method === method);
@@ -1250,34 +1044,21 @@ export default function App() {
 
                 return (
                   <Fragment key={method}>
-                    <tr
-                      className="interactive-row"
-                      onClick={() => setExpandedPayment(open ? null : method)}
-                    >
+                    <tr className="interactive-row" onClick={() => setExpandedPayment(open ? null : method)}>
                       <td>{open ? '▾' : '▸'} {method}</td>
-                      <td>{money(total)}</td>
-                      <td>{money(change)}</td>
+                      <td>{money(total)}</td><td>{money(change)}</td>
                     </tr>
-
                     {open && rows.filter(p => p.brand).map((p, i) => (
                       <tr key={`${method}-${p.brand}-${i}`}>
-                        <td style={{ paddingLeft: 32, color: '#9aaca0' }}>
-                          ↳ {p.brand}
-                        </td>
-                        <td>{money(p.amount)}</td>
-                        <td>{money(p.change_amount || 0)}</td>
+                        <td style={{ paddingLeft: 32, color: '#9aaca0' }}>↳ {p.brand}</td>
+                        <td>{money(p.amount)}</td><td>{money(p.change_amount || 0)}</td>
                       </tr>
                     ))}
                   </Fragment>
                 );
               })}
-
               {!(data?.payments || []).length && (
-                <tr>
-                  <td colSpan={3} className="empty">
-                    Nenhum pagamento encontrado.
-                  </td>
-                </tr>
+                <tr><td colSpan={3} className="empty">Nenhum pagamento encontrado.</td></tr>
               )}
             </tbody>
           </table>
@@ -1288,23 +1069,14 @@ export default function App() {
         <div className="panel-head">
           <div>
             <h2>Desempenho mensal comparativo</h2>
-            <p>
-              Faturamento, média diária e markup ao longo dos 12 meses.
-              Selecione os itens da legenda para mostrar ou ocultar indicadores.
-            </p>
+            <p>Faturamento, média diária e markup ao longo dos 12 meses. Passe o mouse sobre a legenda para destacar cada indicador.</p>
           </div>
           <span className="tag">ANÁLISE ANUAL</span>
         </div>
-
-        <div className="annual-chart">
-          <ReactECharts
-            option={monthlyCombinedOption}
-            notMerge={true}
-            lazyUpdate={true}
-            style={{ height: 390, width: '100%' }}
-          />
-        </div>
+        <ReactECharts option={annualChartOption} notMerge={true}
+          lazyUpdate={true} style={{ height: isMobile ? 300 : 410, width: '100%' }} />
       </section>
+
 
       <section className="panel products product-list-panel">
         <div className="panel-head">
@@ -1314,7 +1086,6 @@ export default function App() {
           </div>
           <span className="tag">PRODUTOS</span>
         </div>
-
         <div className="table-wrap">
           <table className="product-table">
             <thead>
@@ -1328,22 +1099,16 @@ export default function App() {
                 {productHeading('Markdown', 'markdown')}
               </tr>
             </thead>
-
             <tbody>
               {sortedProducts.map((p, i) => {
                 const revenue = Number(p.revenue || 0);
                 const cost = Number(p.cost || 0);
                 const profit = revenue - cost;
                 const markup = cost > 0 ? profit / cost * 100 : 0;
-
                 return (
-                  <tr
-                    key={`${p.product}-${i}`}
+                  <tr key={`${p.product}-${i}`}
                     className={`interactive-row ${filters.product === p.product ? 'selected-product' : ''}`}
-                    onClick={() => update({
-                      product: filters.product === p.product ? '' : p.product
-                    })}
-                  >
+                    onClick={() => update({ product: filters.product === p.product ? '' : p.product })}>
                     <td>{p.product}</td>
                     <td>{number(p.quantity)}</td>
                     <td>{money(revenue)}</td>
@@ -1354,13 +1119,8 @@ export default function App() {
                   </tr>
                 );
               })}
-
               {!sortedProducts.length && (
-                <tr>
-                  <td colSpan={7} className="empty">
-                    Nenhum produto encontrado para os filtros selecionados.
-                  </td>
-                </tr>
+                <tr><td colSpan={7} className="empty">Nenhum produto encontrado para os filtros selecionados.</td></tr>
               )}
             </tbody>
           </table>
@@ -1410,13 +1170,7 @@ function Gauge({
 }) {
   const displayedValue = Math.max(0, Number.isFinite(value) ? value : 0);
   const needleValue = Math.min(max, displayedValue);
-
-  const zone = needleValue < yellowStart
-    ? 'Vermelho'
-    : needleValue < greenStart
-      ? 'Amarelo'
-      : 'Verde';
-
+  const zone = needleValue < yellowStart ? 'Vermelho' : needleValue < greenStart ? 'Amarelo' : 'Verde';
   const formattedValue = percent(displayedValue);
 
   const option = {
@@ -1440,11 +1194,7 @@ function Gauge({
         show: true,
         showAbove: true,
         size: 9,
-        itemStyle: {
-          color: '#a8dcb6',
-          borderColor: '#17231c',
-          borderWidth: 2
-        }
+        itemStyle: { color: '#a8dcb6', borderColor: '#17231c', borderWidth: 2 }
       },
       progress: { show: false },
       axisLine: {
@@ -1468,23 +1218,12 @@ function Gauge({
   return (
     <article className="panel gauge-panel">
       <div className="panel-head">
-        <div>
-          <h2>{title}</h2>
-          <p>{subtitle}</p>
-        </div>
+        <div><h2>{title}</h2><p>{subtitle}</p></div>
         <span className="tag">INDICADOR</span>
       </div>
-
-      <ReactECharts
-        option={option}
-        notMerge={true}
-        style={{ height: 175, width: '100%', marginTop: 4 }}
-      />
-
+      <ReactECharts option={option} style={{ height: 175, marginTop: 4 }} />
       <div className="gauge-value">{formattedValue}</div>
-      <div className={`gauge-status ${zone.toLowerCase()}`}>
-        Faixa atual: {zone}
-      </div>
+      <div className={`gauge-status ${zone.toLowerCase()}`}>Faixa atual: {zone}</div>
     </article>
   );
 }
