@@ -1,4 +1,3 @@
-
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 
@@ -137,7 +136,6 @@ const initialFilters: Filters = {
   hour: ''
 };
 
-// Cria uma escala gradual de verdes.
 function interpolateGreen(start: string, end: string, steps: number) {
   const hexToRgb = (hex: string) => ({
     r: parseInt(hex.slice(1, 3), 16),
@@ -164,28 +162,35 @@ function interpolateGreen(start: string, end: string, steps: number) {
   });
 }
 
-// 20 faixas de 10 cupons, de 1 até 200.
-const heatmapGreenColors = interpolateGreen(
-  '#d5f0dc',
-  '#174c2e',
-  20
-);
+function createHeatmapPieces(step: number, limit: number) {
+  const colors = interpolateGreen(
+    '#d5f0dc',
+    '#174c2e',
+    limit / step
+  );
 
-const heatmapPieces = [
-  {
-    value: 0,
-    color: '#e8f6eb'
-  },
-  ...heatmapGreenColors.map((color, i) => ({
-    min: i * 10 + 1,
-    max: i * 10 + 10,
-    color
-  })),
-  {
-    min: 201,
-    color: '#103d25'
-  }
-];
+  return [
+    {
+      value: 0,
+      color: '#e8f6eb'
+    },
+    ...colors.map((color, i) => ({
+      min: i * step + 1,
+      max: (i + 1) * step,
+      color
+    })),
+    {
+      min: limit + 1,
+      color: '#103d25'
+    }
+  ];
+}
+
+// Todas as lojas: faixas de 10 cupons até 200.
+const heatmapAllStoresPieces = createHeatmapPieces(10, 200);
+
+// Loja individual: faixas de 5 cupons até 100.
+const heatmapSingleStorePieces = createHeatmapPieces(5, 100);
 
 export default function App() {
   const [filters, setFilters] = useState<Filters>(initialFilters);
@@ -284,7 +289,7 @@ export default function App() {
     },
     yAxis: {
       type: 'value',
-      axisLabel: { color: '#aab8ae' },
+      axisLabel: { show: false },
       splitLine: { lineStyle: { color: '#26352d' } }
     },
     series: [{
@@ -654,7 +659,6 @@ export default function App() {
   const heatmapData = data?.heatmap || [];
   const weekdayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
-  // Somente horários entre 07h e 20h, inclusive.
   const heatmapHours = Array.from(
     { length: 14 },
     (_, i) => String(i + 7).padStart(2, '0')
@@ -711,8 +715,9 @@ export default function App() {
       }
     },
 
-    // Escala fixa por faixas de 10 cupons.
-    // Não depende do maior valor retornado pela consulta.
+    // A escala muda conforme a seleção de lojas.
+    // Todas: 10 em 10 até 200.
+    // Loja individual: 5 em 5 até 100.
     visualMap: {
       type: 'piecewise',
       dimension: 2,
@@ -720,7 +725,9 @@ export default function App() {
       left: 'center',
       bottom: 0,
       show: false,
-      pieces: heatmapPieces
+      pieces: filters.store === '0'
+        ? heatmapAllStoresPieces
+        : heatmapSingleStorePieces
     },
 
     series: [{
@@ -752,7 +759,7 @@ export default function App() {
         }
       }
     }]
-  }), [heatmapVisibleData]);
+  }), [heatmapVisibleData, filters.store]);
 
   const onGroupClick = (p: any) => {
     const found = (data?.groupSales || []).find(g => g.name === p?.name);
@@ -1492,21 +1499,10 @@ function Gauge({
         }
       },
 
-      axisTick: {
-        show: false
-      },
-
-      splitLine: {
-        show: false
-      },
-
-      axisLabel: {
-        show: false
-      },
-
-      detail: {
-        show: false
-      },
+      axisTick: { show: false },
+      splitLine: { show: false },
+      axisLabel: { show: false },
+      detail: { show: false },
 
       data: [{
         value: needleValue
