@@ -34,6 +34,25 @@ type MonthSale = {
   markup?: number;
 };
 
+type ProductSale = {
+  product: string;
+  quantity: number;
+  revenue: number;
+  cost: number;
+  groupCode?: number;
+  group?: string;
+  markdown?: number;
+};
+
+type ProductSortKey =
+  | 'product'
+  | 'quantity'
+  | 'revenue'
+  | 'cost'
+  | 'profit'
+  | 'markup'
+  | 'markdown';
+
 type Dashboard = {
   stores: { id: number; name: string }[];
   storeSales?: StoreSale[];
@@ -47,6 +66,8 @@ type Dashboard = {
     gross_profit: number;
     gross_margin?: number;
     cost_percentage?: number;
+    markup?: number;
+    markdown?: number;
   };
   daily: { day: string; revenue: number }[];
   payments: {
@@ -55,14 +76,7 @@ type Dashboard = {
     amount: number;
     change_amount?: number;
   }[];
-  products: {
-    product: string;
-    quantity: number;
-    revenue: number;
-    cost: number;
-    groupCode?: number;
-    group?: string;
-  }[];
+  products: ProductSale[];
   groups?: { code: string; name: string }[];
   cancellations?: {
     coupons: number;
@@ -93,21 +107,6 @@ type Dashboard = {
   };
 };
 
-type SaleResult = {
-  sale: null | {
-    storeId: number;
-    storeName: string;
-    documentId: string;
-    issuedAt: string;
-    total: number;
-    gross: number;
-    items: any[];
-    payments: any[];
-  };
-  message?: string;
-  source?: string;
-};
-
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
 const money = (v: number | string) =>
@@ -116,8 +115,8 @@ const money = (v: number | string) =>
     currency: 'BRL'
   });
 
-const number = (v: number) =>
-  Number(v || 0).toLocaleString('pt-BR');
+const number = (v: number) => Number(v || 0).toLocaleString('pt-BR');
+const percent = (v: number) => `${Number(v || 0).toFixed(2).replace('.', ',')}%`;
 
 const dateLocal = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -153,7 +152,6 @@ function interpolateGreen(start: string, end: string, steps: number) {
 
   return Array.from({ length: steps }, (_, i) => {
     const t = steps === 1 ? 0 : i / (steps - 1);
-
     return rgbToHex(
       a.r + (b.r - a.r) * t,
       a.g + (b.g - a.g) * t,
@@ -163,34 +161,23 @@ function interpolateGreen(start: string, end: string, steps: number) {
 }
 
 function createHeatmapPieces(step: number, limit: number) {
-  const colors = interpolateGreen(
-    '#d5f0dc',
-    '#174c2e',
-    limit / step
-  );
+  const colors = interpolateGreen('#d5f0dc', '#174c2e', limit / step);
 
   return [
-    {
-      value: 0,
-      color: '#e8f6eb'
-    },
+    { value: 0, color: '#e8f6eb' },
     ...colors.map((color, i) => ({
       min: i * step + 1,
       max: (i + 1) * step,
       color
     })),
-    {
-      min: limit + 1,
-      color: '#103d25'
-    }
+    { min: limit + 1, color: '#103d25' }
   ];
 }
 
-// Todas as lojas: faixas de 10 cupons até 200.
 const heatmapAllStoresPieces = createHeatmapPieces(10, 200);
-
-// Loja individual: faixas de 5 cupons até 100.
 const heatmapSingleStorePieces = createHeatmapPieces(5, 100);
+
+const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export default function App() {
   const [filters, setFilters] = useState<Filters>(initialFilters);
@@ -198,21 +185,17 @@ export default function App() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
+  const [expandedPayment, setExpandedPayment] = useState<string | null>(null);
+  const [productSort, setProductSort] = useState<{ key: ProductSortKey; direction: 'asc' | 'desc' }>({
+    key: 'revenue',
+    direction: 'desc'
+  });
 
   const requestId = useRef(0);
-
-  const [saleStore, setSaleStore] = useState('3');
-  const [saleDate, setSaleDate] = useState(today);
-  const [saleDocument, setSaleDocument] = useState('');
-  const [saleResult, setSaleResult] = useState<SaleResult | null>(null);
-  const [saleLoading, setSaleLoading] = useState(false);
-  const [saleError, setSaleError] = useState('');
-  const [expandedPayment, setExpandedPayment] = useState<string | null>(null);
 
   const load = useCallback(async (manual = false, override?: Filters) => {
     const current = override || filters;
     const id = ++requestId.current;
-
     setLoading(true);
     setError('');
 
@@ -233,26 +216,15 @@ export default function App() {
       const response = await fetch(`${API}/api/dashboard?${q.toString()}`);
       const result = await response.json();
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Não foi possível consultar as lojas.');
-      }
-
+      if (!response.ok) throw new Error(result.error || 'Não foi possível consultar as lojas.');
       if (id !== requestId.current) return;
 
       setData(result);
-      setLastUpdated(
-        result.cache?.updatedAt ||
-        result.generatedAt ||
-        new Date().toISOString()
-      );
+      setLastUpdated(result.cache?.updatedAt || result.generatedAt || new Date().toISOString());
     } catch (e: any) {
-      if (id === requestId.current) {
-        setError(e.message || 'Falha de conexão com o backend.');
-      }
+      if (id === requestId.current) setError(e.message || 'Falha de conexão com o backend.');
     } finally {
-      if (id === requestId.current) {
-        setLoading(false);
-      }
+      if (id === requestId.current) setLoading(false);
     }
   }, [filters]);
 
@@ -260,9 +232,7 @@ export default function App() {
     void load(false);
   }, [load]);
 
-  const update = (patch: Partial<Filters>) =>
-    setFilters(old => ({ ...old, ...patch }));
-
+  const update = (patch: Partial<Filters>) => setFilters(old => ({ ...old, ...patch }));
   const resetFilters = () => setFilters(initialFilters);
 
   const dailyOption = useMemo(() => ({
@@ -274,13 +244,7 @@ export default function App() {
       textStyle: { color: '#edf4ef' },
       valueFormatter: (v: any) => money(v)
     },
-    grid: {
-      left: 12,
-      right: 18,
-      top: 24,
-      bottom: 34,
-      containLabel: true
-    },
+    grid: { left: 12, right: 18, top: 24, bottom: 34, containLabel: true },
     xAxis: {
       type: 'category',
       data: data?.daily.map(x => x.day) || [],
@@ -306,45 +270,28 @@ export default function App() {
 
   const paymentOptions = useMemo(() => {
     const opts = new Map<string, string>();
-
     for (const p of data?.payments || []) {
       opts.set(p.method, p.method);
-
-      if (p.brand) {
-        opts.set(p.brand, `${p.brand} · ${p.method}`);
-      }
+      if (p.brand) opts.set(p.brand, `${p.brand} · ${p.method}`);
     }
-
     return [...opts];
   }, [data]);
 
   const paymentTotals = useMemo(() => {
     const totals = new Map<string, number>();
-
     for (const p of data?.payments || []) {
-      totals.set(
-        p.method,
-        (totals.get(p.method) || 0) + Number(p.amount)
-      );
+      totals.set(p.method, (totals.get(p.method) || 0) + Number(p.amount));
     }
-
     return [...totals].map(([name, value]) => ({ name, value }));
   }, [data]);
 
   const paymentOption = useMemo(() => {
-    const total = paymentTotals.reduce(
-      (sum, p) => sum + Number(p.value),
-      0
-    );
-
+    const total = paymentTotals.reduce((sum, p) => sum + Number(p.value), 0);
     const percentage = (value: number) =>
-      total > 0
-        ? `${((value / total) * 100).toFixed(1).replace('.', ',')}%`
-        : '0%';
+      total > 0 ? `${((value / total) * 100).toFixed(1).replace('.', ',')}%` : '0%';
 
     return {
       animationDuration: 500,
-
       tooltip: {
         trigger: 'item',
         backgroundColor: '#203229',
@@ -353,7 +300,6 @@ export default function App() {
         formatter: (p: any) =>
           `${p.name}<br/>${money(p.value)} (${p.percent.toFixed(1).replace('.', ',')}%)`
       },
-
       legend: {
         type: 'scroll',
         orient: 'vertical',
@@ -366,131 +312,56 @@ export default function App() {
         itemGap: 13,
         pageIconColor: '#79c99a',
         pageTextStyle: { color: '#aab8ae' },
-        textStyle: {
-          color: '#aab8ae',
-          fontSize: 10
-        },
+        textStyle: { color: '#aab8ae', fontSize: 10 },
         formatter: (name: string) => {
           const item = paymentTotals.find(p => p.name === name);
           return item ? `${name}  ${percentage(item.value)}` : name;
         }
       },
-
       series: [{
         type: 'pie',
         radius: ['43%', '66%'],
         center: ['28%', '50%'],
-        itemStyle: {
-          borderColor: '#17231c',
-          borderWidth: 3
-        },
+        itemStyle: { borderColor: '#17231c', borderWidth: 3 },
         label: { show: false },
         labelLine: { show: false },
         emphasis: {
           scale: true,
           scaleSize: 7,
           label: { show: false },
-          itemStyle: {
-            shadowBlur: 15,
-            shadowColor: 'rgba(0,0,0,.3)'
-          }
+          itemStyle: { shadowBlur: 15, shadowColor: 'rgba(0,0,0,.3)' }
         },
         data: paymentTotals
       }],
-
-      media: [
-        {
-          query: { maxWidth: 600 },
-          option: {
-            legend: {
-              orient: 'vertical',
-              left: '52%',
-              right: 5,
-              top: 'middle',
-              bottom: 'auto',
-              width: '45%',
-              itemGap: 12,
-              itemWidth: 10,
-              itemHeight: 10,
-              textStyle: {
-                fontSize: 9,
-                color: '#aab8ae'
-              }
-            },
-            series: [{
-              center: ['26%', '50%'],
-              radius: ['30%', '45%']
-            }]
-          }
+      media: [{
+        query: { maxWidth: 600 },
+        option: {
+          legend: {
+            orient: 'vertical',
+            left: '52%',
+            right: 5,
+            top: 'middle',
+            bottom: 'auto',
+            width: '45%',
+            itemGap: 12,
+            itemWidth: 10,
+            itemHeight: 10,
+            textStyle: { fontSize: 9, color: '#aab8ae' }
+          },
+          series: [{ center: ['26%', '50%'], radius: ['30%', '45%'] }]
         }
-      ]
+      }]
     };
   }, [paymentTotals]);
 
-  const productOption = useMemo(() => ({
-    animationDuration: 500,
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
-      backgroundColor: '#203229',
-      borderColor: '#45634f',
-      textStyle: { color: '#edf4ef' },
-      valueFormatter: (v: any) => money(v)
-    },
-    grid: {
-      left: 12,
-      right: 18,
-      top: 16,
-      bottom: 55,
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: (data?.products || []).slice(0, 8).map(p => p.product),
-      axisLabel: {
-        color: '#aab8ae',
-        rotate: 20,
-        interval: 0
-      }
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: { color: '#aab8ae' },
-      splitLine: { lineStyle: { color: '#26352d' } }
-    },
-    series: [{
-      type: 'bar',
-      data: (data?.products || []).slice(0, 8).map(p => p.revenue),
-      itemStyle: {
-        color: '#79c99a',
-        borderRadius: [5, 5, 0, 0]
-      },
-      emphasis: {
-        itemStyle: {
-          color: '#a8dcb6',
-          shadowBlur: 12,
-          shadowColor: 'rgba(121,201,154,.25)'
-        }
-      }
-    }]
-  }), [data]);
-
   const groupOption = useMemo(() => {
-    const groupData = (data?.groupSales || []).map(g => ({
-      name: g.name,
-      value: Number(g.revenue)
-    }));
-
+    const groupData = (data?.groupSales || []).map(g => ({ name: g.name, value: Number(g.revenue) }));
     const total = groupData.reduce((sum, g) => sum + g.value, 0);
-
     const percentage = (value: number) =>
-      total > 0
-        ? `${((value / total) * 100).toFixed(1).replace('.', ',')}%`
-        : '0%';
+      total > 0 ? `${((value / total) * 100).toFixed(1).replace('.', ',')}%` : '0%';
 
     return {
       animationDuration: 600,
-
       tooltip: {
         trigger: 'item',
         backgroundColor: '#203229',
@@ -499,7 +370,6 @@ export default function App() {
         formatter: (p: any) =>
           `${p.name}<br/>${money(p.value)} (${p.percent.toFixed(1).replace('.', ',')}%)`
       },
-
       legend: {
         orient: 'vertical',
         left: 8,
@@ -507,25 +377,18 @@ export default function App() {
         itemWidth: 13,
         itemHeight: 13,
         itemGap: 14,
-        textStyle: {
-          color: '#aab8ae',
-          fontSize: 11
-        },
+        textStyle: { color: '#aab8ae', fontSize: 11 },
         formatter: (name: string) => {
           const item = groupData.find(g => g.name === name);
           return item ? `${name}  ${percentage(item.value)}` : name;
         }
       },
-
       series: [{
         type: 'pie',
         radius: ['42%', '68%'],
         center: ['69%', '50%'],
         avoidLabelOverlap: true,
-        itemStyle: {
-          borderColor: '#17231c',
-          borderWidth: 3
-        },
+        itemStyle: { borderColor: '#17231c', borderWidth: 3 },
         label: { show: false },
         emphasis: {
           scale: true,
@@ -534,43 +397,30 @@ export default function App() {
             show: true,
             color: '#edf4ef',
             fontWeight: 700,
-            formatter: (p: any) =>
-              `${p.percent.toFixed(1).replace('.', ',')}%`
+            formatter: (p: any) => `${p.percent.toFixed(1).replace('.', ',')}%`
           },
-          itemStyle: {
-            shadowBlur: 18,
-            shadowColor: 'rgba(0,0,0,.35)'
-          }
+          itemStyle: { shadowBlur: 18, shadowColor: 'rgba(0,0,0,.35)' }
         },
         data: groupData
       }],
-
-      media: [
-        {
-          query: { maxWidth: 600 },
-          option: {
-            legend: {
-              orient: 'vertical',
-              left: '52%',
-              right: 5,
-              top: 'middle',
-              bottom: 'auto',
-              width: '45%',
-              itemGap: 12,
-              itemWidth: 10,
-              itemHeight: 10,
-              textStyle: {
-                fontSize: 9,
-                color: '#aab8ae'
-              }
-            },
-            series: [{
-              center: ['26%', '50%'],
-              radius: ['30%', '45%']
-            }]
-          }
+      media: [{
+        query: { maxWidth: 600 },
+        option: {
+          legend: {
+            orient: 'vertical',
+            left: '52%',
+            right: 5,
+            top: 'middle',
+            bottom: 'auto',
+            width: '45%',
+            itemGap: 12,
+            itemWidth: 10,
+            itemHeight: 10,
+            textStyle: { fontSize: 9, color: '#aab8ae' }
+          },
+          series: [{ center: ['26%', '50%'], radius: ['30%', '45%'] }]
         }
-      ]
+      }]
     };
   }, [data]);
 
@@ -583,17 +433,8 @@ export default function App() {
       textStyle: { color: '#edf4ef' },
       valueFormatter: (v: any) => money(v)
     },
-    legend: {
-      top: 0,
-      textStyle: { color: '#aab8ae' }
-    },
-    grid: {
-      left: 12,
-      right: 18,
-      top: 38,
-      bottom: 28,
-      containLabel: true
-    },
+    legend: { top: 0, textStyle: { color: '#aab8ae' } },
+    grid: { left: 12, right: 18, top: 38, bottom: 28, containLabel: true },
     xAxis: {
       type: 'category',
       data: (data?.monthly || []).map(m => m.month),
@@ -602,10 +443,7 @@ export default function App() {
     },
     yAxis: {
       type: 'value',
-      axisLabel: {
-        color: '#aab8ae',
-        formatter: (v: number) => `R$${v}`
-      },
+      axisLabel: { color: '#aab8ae', formatter: (v: number) => `R$${v}` },
       splitLine: { lineStyle: { color: '#26352d' } }
     },
     series: [{
@@ -613,65 +451,146 @@ export default function App() {
       type: 'bar',
       barMaxWidth: 30,
       data: (data?.monthly || []).map(m => m.revenue),
-      itemStyle: {
-        color: '#79c99a',
-        borderRadius: [5, 5, 0, 0]
-      },
-      emphasis: {
-        itemStyle: { color: '#a8dcb6' }
-      }
+      itemStyle: { color: '#79c99a', borderRadius: [5, 5, 0, 0] },
+      emphasis: { itemStyle: { color: '#a8dcb6' } }
     }]
   }), [data]);
 
+  // Garante Jan-Dez do ano selecionado; meses ausentes são exibidos como zero, sem estimativas.
+  const annualMonths = useMemo(() => {
+    const year = filters.to.slice(0, 4) || String(new Date().getFullYear());
+    const monthlyMap = new Map((data?.monthly || []).map(m => [m.month, m]));
+    return monthNames.map((label, index) => {
+      const key = `${year}-${String(index + 1).padStart(2, '0')}`;
+      const month = monthlyMap.get(key);
+      return {
+        key,
+        label,
+        revenue: Number(month?.revenue || 0),
+        averageDaily: Number(month?.average_daily || 0),
+        markup: month?.markup == null ? null : Number(month.markup)
+      };
+    });
+  }, [data, filters.to]);
+
+  const monthlyCombinedOption = useMemo(() => ({
+    animationDuration: 650,
+    color: ['#529ee0', '#a982c7', '#ef8585'],
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      backgroundColor: '#203229',
+      borderColor: '#45634f',
+      textStyle: { color: '#edf4ef' },
+      formatter: (params: any[]) => {
+        if (!params?.length) return '';
+        const month = annualMonths[params[0].dataIndex];
+        if (!month) return '';
+        return [
+          `<strong>${month.label}</strong>`,
+          `<span style="color:#529ee0">●</span> Valor Total: <strong>${money(month.revenue)}</strong>`,
+          `<span style="color:#a982c7">●</span> Valor Médio Diário: <strong>${money(month.averageDaily)}</strong>`,
+          `<span style="color:#ef8585">●</span> Markup: <strong>${month.markup == null ? 'Sem dado' : percent(month.markup)}</strong>`
+        ].join('<br/>');
+      }
+    },
+    legend: {
+      top: 5,
+      left: 'center',
+      itemGap: 20,
+      textStyle: { color: '#aab8ae', fontSize: 11 },
+      data: ['Valor Total', 'Valor Médio Diário', 'Markup'],
+      emphasis: { selectorLabel: { color: '#fff' } }
+    },
+    grid: { left: 76, right: 76, top: 55, bottom: 42, containLabel: false },
+    xAxis: {
+      type: 'category',
+      data: annualMonths.map(m => m.label),
+      axisLine: { lineStyle: { color: '#34443b' } },
+      axisLabel: { color: '#aab8ae' }
+    },
+    yAxis: [
+      {
+        type: 'value',
+        name: 'Faturamento',
+        nameTextStyle: { color: '#529ee0' },
+        axisLabel: { color: '#aab8ae', formatter: (v: number) => `R$${number(v)}` },
+        splitLine: { lineStyle: { color: '#26352d' } }
+      },
+      {
+        type: 'value',
+        name: 'Média diária',
+        nameTextStyle: { color: '#a982c7' },
+        axisLabel: { color: '#aab8ae', formatter: (v: number) => `R$${number(v)}` },
+        splitLine: { show: false }
+      },
+      {
+        type: 'value',
+        name: 'Markup',
+        nameTextStyle: { color: '#ef8585' },
+        axisLabel: { color: '#aab8ae', formatter: (v: number) => `${v}%` },
+        splitLine: { show: false }
+      }
+    ],
+    series: [
+      {
+        name: 'Valor Total',
+        type: 'bar',
+        yAxisIndex: 0,
+        barMaxWidth: 25,
+        data: annualMonths.map(m => m.revenue),
+        itemStyle: { color: '#529ee0', borderRadius: [4, 4, 0, 0] },
+        emphasis: { focus: 'series' }
+      },
+      {
+        name: 'Valor Médio Diário',
+        type: 'bar',
+        yAxisIndex: 1,
+        barMaxWidth: 25,
+        data: annualMonths.map(m => m.averageDaily),
+        itemStyle: { color: '#a982c7', borderRadius: [4, 4, 0, 0] },
+        emphasis: { focus: 'series' }
+      },
+      {
+        name: 'Markup',
+        type: 'line',
+        yAxisIndex: 2,
+        smooth: false,
+        symbol: 'circle',
+        symbolSize: 7,
+        connectNulls: false,
+        data: annualMonths.map(m => m.markup),
+        lineStyle: { color: '#ef8585', width: 2.5 },
+        itemStyle: { color: '#ef8585', borderColor: '#fff', borderWidth: 1 },
+        emphasis: { focus: 'series', scale: 1.4 }
+      }
+    ]
+  }), [annualMonths]);
+
   const onDailyClick = (p: any) => {
-    if (p?.name) {
-      update({ from: p.name, to: p.name });
-    }
+    if (p?.name) update({ from: p.name, to: p.name });
   };
 
   const onPaymentClick = (p: any) => {
-    if (p?.name) {
-      update({
-        payment: filters.payment === p.name ? '' : p.name
-      });
-    }
-  };
-
-  const onProductClick = (p: any) => {
-    if (p?.name) {
-      update({
-        product: filters.product === p.name ? '' : p.name
-      });
-    }
+    if (p?.name) update({ payment: filters.payment === p.name ? '' : p.name });
   };
 
   const onHeatmapClick = (p: any) => {
     const v = p?.data;
-
     if (Array.isArray(v) && v.length >= 2) {
-      update({
-        hour: String(v[0]),
-        weekday: String(v[1])
-      });
+      update({ hour: String(v[0]).replace(/^0/, ''), weekday: String(v[1]) });
     }
   };
 
-  const heatmapData = data?.heatmap || [];
   const weekdayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-
-  const heatmapHours = Array.from(
-    { length: 14 },
-    (_, i) => String(i + 7).padStart(2, '0')
-  );
-
-  const heatmapVisibleData = heatmapData.filter(item => {
+  const heatmapHours = Array.from({ length: 14 }, (_, i) => String(i + 7).padStart(2, '0'));
+  const heatmapVisibleData = (data?.heatmap || []).filter(item => {
     const hour = Number(item.hour);
     return hour >= 7 && hour <= 20;
   });
 
   const heatmapOption = useMemo(() => ({
     animationDuration: 500,
-
     tooltip: {
       position: 'top',
       backgroundColor: '#203229',
@@ -680,44 +599,23 @@ export default function App() {
       formatter: (p: any) =>
         `${weekdayNames[p.data[1]]} · ${p.data[0]}h<br/>${number(p.data[2])} cupons<br/>${money(p.data[3])}`
     },
-
-    grid: {
-      left: 42,
-      right: 18,
-      top: 18,
-      bottom: 35
-    },
-
+    grid: { left: 42, right: 18, top: 18, bottom: 35 },
     xAxis: {
       type: 'category',
       data: heatmapHours,
       splitArea: {
         show: true,
-        areaStyle: {
-          color: ['rgba(255,255,255,.015)', 'rgba(255,255,255,.025)']
-        }
+        areaStyle: { color: ['rgba(255,255,255,.015)', 'rgba(255,255,255,.025)'] }
       },
-      axisLabel: {
-        color: '#aab8ae',
-        interval: 0
-      },
-      axisLine: {
-        lineStyle: { color: '#34443b' }
-      }
+      axisLabel: { color: '#aab8ae', interval: 0 },
+      axisLine: { lineStyle: { color: '#34443b' } }
     },
-
     yAxis: {
       type: 'category',
       data: weekdayNames,
       axisLabel: { color: '#aab8ae' },
-      axisLine: {
-        lineStyle: { color: '#34443b' }
-      }
+      axisLine: { lineStyle: { color: '#34443b' } }
     },
-
-    // A escala muda conforme a seleção de lojas.
-    // Todas: 10 em 10 até 200.
-    // Loja individual: 5 em 5 até 100.
     visualMap: {
       type: 'piecewise',
       dimension: 2,
@@ -725,31 +623,18 @@ export default function App() {
       left: 'center',
       bottom: 0,
       show: false,
-      pieces: filters.store === '0'
-        ? heatmapAllStoresPieces
-        : heatmapSingleStorePieces
+      pieces: filters.store === '0' ? heatmapAllStoresPieces : heatmapSingleStorePieces
     },
-
     series: [{
       type: 'heatmap',
-
       data: heatmapVisibleData.map(item => [
         String(item.hour).padStart(2, '0'),
         item.weekday,
         Number(item.coupons),
         Number(item.revenue)
       ]),
-
-      label: {
-        show: false
-      },
-
-      itemStyle: {
-        borderColor: '#17231c',
-        borderWidth: 2,
-        borderRadius: 3
-      },
-
+      label: { show: false },
+      itemStyle: { borderColor: '#17231c', borderWidth: 2, borderRadius: 3 },
       emphasis: {
         itemStyle: {
           borderColor: '#edf4ef',
@@ -763,49 +648,10 @@ export default function App() {
 
   const onGroupClick = (p: any) => {
     const found = (data?.groupSales || []).find(g => g.name === p?.name);
-
-    if (found) {
-      update({
-        group: filters.group === found.code ? '' : found.code
-      });
-    }
-  };
-
-  const searchSale = async () => {
-    if (!saleDocument.trim()) {
-      setSaleError('Informe o número do cupom.');
-      return;
-    }
-
-    setSaleLoading(true);
-    setSaleError('');
-    setSaleResult(null);
-
-    try {
-      const url =
-        `${API}/api/sales/${saleStore}/${encodeURIComponent(saleDocument.trim())}?date=${saleDate}&refresh=1`;
-
-      const r = await fetch(url);
-      const json = await r.json();
-
-      if (!r.ok) {
-        throw new Error(json.error || 'Erro ao consultar cupom.');
-      }
-
-      setSaleResult(json);
-
-      if (!json.sale) {
-        setSaleError(json.message || 'Cupom não encontrado.');
-      }
-    } catch (e: any) {
-      setSaleError(e.message || 'Falha na consulta.');
-    } finally {
-      setSaleLoading(false);
-    }
+    if (found) update({ group: filters.group === found.code ? '' : found.code });
   };
 
   const k = data?.kpis;
-
   const updatedLabel = lastUpdated
     ? new Date(lastUpdated).toLocaleTimeString('pt-BR', {
         hour: '2-digit',
@@ -818,25 +664,18 @@ export default function App() {
     (k as any)?.markup ??
     ((Number(k?.gross_profit || 0) / Math.max(1, Number(k?.cost || 0))) * 100)
   );
-
   const markdownValue = Number((k as any)?.markdown ?? 0);
-
   const marginValue = Number(
     (k as any)?.gross_margin ??
-    (
-      Number(k?.revenue || 0)
-        ? Number(k?.gross_profit || 0) / Number(k?.revenue || 1) * 100
-        : 0
-    )
+    (Number(k?.revenue || 0)
+      ? Number(k?.gross_profit || 0) / Number(k?.revenue || 1) * 100
+      : 0)
   );
-
   const costPercent = Number(
     (k as any)?.cost_percentage ??
-    (
-      Number(k?.revenue || 0)
-        ? Number(k?.cost || 0) / Number(k?.revenue || 1) * 100
-        : 0
-    )
+    (Number(k?.revenue || 0)
+      ? Number(k?.cost || 0) / Number(k?.revenue || 1) * 100
+      : 0)
   );
 
   const cancelled = data?.cancellations || (
@@ -851,7 +690,60 @@ export default function App() {
   );
 
   const storeSales = data?.storeSales || [];
-  const groupSales = data?.groupSales || [];
+
+  const sortedProducts = useMemo(() => {
+    const products = [...(data?.products || [])];
+
+    const valueFor = (p: ProductSale): string | number | null => {
+      const profit = Number(p.revenue || 0) - Number(p.cost || 0);
+      const markup = Number(p.cost || 0) > 0 ? profit / Number(p.cost) * 100 : 0;
+      switch (productSort.key) {
+        case 'product': return p.product || '';
+        case 'quantity': return Number(p.quantity || 0);
+        case 'revenue': return Number(p.revenue || 0);
+        case 'cost': return Number(p.cost || 0);
+        case 'profit': return profit;
+        case 'markup': return markup;
+        case 'markdown': return p.markdown == null ? null : Number(p.markdown);
+      }
+    };
+
+    products.sort((a, b) => {
+      const av = valueFor(a);
+      const bv = valueFor(b);
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      const result = typeof av === 'string'
+        ? av.localeCompare(String(bv), 'pt-BR', { sensitivity: 'base' })
+        : Number(av) - Number(bv);
+      return productSort.direction === 'asc' ? result : -result;
+    });
+
+    return products;
+  }, [data?.products, productSort]);
+
+  const changeProductSort = (key: ProductSortKey) => {
+    setProductSort(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const sortArrow = (key: ProductSortKey) =>
+    productSort.key === key
+      ? productSort.direction === 'asc' ? '↑' : '↓'
+      : '↕';
+
+  const productHeading = (label: string, key: ProductSortKey) => (
+    <th aria-sort={productSort.key === key
+      ? productSort.direction === 'asc' ? 'ascending' : 'descending'
+      : 'none'}>
+      <button type="button" className="sort-button" onClick={() => changeProductSort(key)}>
+        {label}<span>{sortArrow(key)}</span>
+      </button>
+    </th>
+  );
 
   return (
     <main className="shell">
@@ -863,7 +755,6 @@ export default function App() {
             <span>INTELLIGENCE · BUSINESS</span>
           </div>
         </div>
-
         <div className="status">
           <i />
           {data?.source === 'demo' ? 'Modo demonstração' : 'Consulta às lojas'}
@@ -874,11 +765,8 @@ export default function App() {
         <div>
           <p className="eyebrow">VISÃO GERAL</p>
           <h1>Inteligência de vendas</h1>
-          <p className="sub">
-            Acompanhe o desempenho das três lojas em um só lugar.
-          </p>
+          <p className="sub">Acompanhe o desempenho das três lojas em um só lugar.</p>
         </div>
-
         <button className="refresh" onClick={() => void load(true)} disabled={loading}>
           ↻ {loading ? 'Consultando...' : 'Atualizar agora'}
         </button>
@@ -887,65 +775,41 @@ export default function App() {
       <section className="filters">
         <label>
           Data inicial
-          <input
-            type="date"
-            value={filters.from}
-            max={filters.to}
-            onChange={e => update({ from: e.target.value })}
-          />
+          <input type="date" value={filters.from} max={filters.to}
+            onChange={e => update({ from: e.target.value })} />
         </label>
-
         <label>
           Data final
-          <input
-            type="date"
-            value={filters.to}
-            min={filters.from}
-            onChange={e => update({ to: e.target.value })}
-          />
+          <input type="date" value={filters.to} min={filters.from}
+            onChange={e => update({ to: e.target.value })} />
         </label>
-
         <label>
           Unidade
-          <select
-            value={filters.store}
-            onChange={e => update({ store: e.target.value })}
-          >
+          <select value={filters.store} onChange={e => update({ store: e.target.value })}>
             <option value="0">Todas as lojas</option>
             <option value="1">Loja 1</option>
             <option value="2">Loja 2</option>
             <option value="3">Loja 3</option>
           </select>
         </label>
-
         <label>
           Grupo
-          <select
-            value={filters.group}
-            onChange={e => update({ group: e.target.value })}
-          >
+          <select value={filters.group} onChange={e => update({ group: e.target.value })}>
             <option value="">Todos os grupos</option>
             {(data?.groups || []).map(g => (
               <option key={g.code} value={g.code}>{g.name}</option>
             ))}
           </select>
         </label>
-
         <label>
           Produto
-          <input
-            value={filters.product}
+          <input value={filters.product}
             onChange={e => update({ product: e.target.value })}
-            placeholder="Nome, código ou barras"
-          />
+            placeholder="Nome, código ou barras" />
         </label>
-
         <label>
           Pagamento
-          <select
-            value={filters.payment}
-            onChange={e => update({ payment: e.target.value })}
-          >
+          <select value={filters.payment} onChange={e => update({ payment: e.target.value })}>
             <option value="">Todas as formas</option>
             {paymentOptions.map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
@@ -954,10 +818,7 @@ export default function App() {
         </label>
 
         {(filters.weekday !== '' || filters.hour !== '') && (
-          <button
-            className="clear"
-            onClick={() => update({ weekday: '', hour: '' })}
-          >
+          <button className="clear" onClick={() => update({ weekday: '', hour: '' })}>
             Remover filtro de horário
           </button>
         )}
@@ -965,10 +826,7 @@ export default function App() {
         <button onClick={() => void load(false)} disabled={loading}>
           {loading ? 'Carregando...' : 'Consultar'}
         </button>
-
-        <button className="clear" onClick={resetFilters}>
-          Limpar filtros
-        </button>
+        <button className="clear" onClick={resetFilters}>Limpar filtros</button>
       </section>
 
       <div className="meta-line">
@@ -983,8 +841,7 @@ export default function App() {
 
       {error && (
         <div className="error">
-          {error}
-          <br />
+          {error}<br />
           Confira se o backend está ligado e, no modo real, se o agente está conectado à VPN.
         </div>
       )}
@@ -1005,23 +862,12 @@ export default function App() {
       </section>
 
       <section className="gauges">
-        <Gauge
-          title="Markdown"
-          value={markdownValue}
-          max={85}
-          yellowStart={21.25}
-          greenStart={42.5}
-          subtitle="Desconto médio sobre o preço original"
-        />
-
-        <Gauge
-          title="Markup"
-          value={markupValue}
-          max={100}
-          yellowStart={33}
-          greenStart={66}
-          subtitle="Margem de acréscimo sobre o custo"
-        />
+        <Gauge title="Markdown" value={markdownValue} max={85}
+          yellowStart={21.25} greenStart={42.5}
+          subtitle="Desconto médio sobre o preço original" />
+        <Gauge title="Markup" value={markupValue} max={100}
+          yellowStart={33} greenStart={66}
+          subtitle="Margem de acréscimo sobre o custo" />
 
         <article className="panel store-panel">
           <div className="panel-head">
@@ -1031,37 +877,22 @@ export default function App() {
             </div>
             <span className="tag">LOJAS</span>
           </div>
-
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Loja</th>
-                  <th>Ticket médio</th>
-                  <th>Venda total</th>
-                  <th>Quantidade de vendas</th>
+                  <th>Loja</th><th>Ticket médio</th><th>Venda total</th><th>Quantidade de vendas</th>
                 </tr>
               </thead>
               <tbody>
                 {storeSales.map(s => (
-                  <tr
-                    key={s.id}
-                    className="interactive-row"
-                    onClick={() => update({ store: String(s.id) })}
-                  >
-                    <td>{s.name}</td>
-                    <td>{money(s.average_ticket)}</td>
-                    <td>{money(s.revenue)}</td>
-                    <td>{number(s.coupons)}</td>
+                  <tr key={s.id} className="interactive-row" onClick={() => update({ store: String(s.id) })}>
+                    <td>{s.name}</td><td>{money(s.average_ticket)}</td>
+                    <td>{money(s.revenue)}</td><td>{number(s.coupons)}</td>
                   </tr>
                 ))}
-
                 {!storeSales.length && (
-                  <tr>
-                    <td colSpan={4} className="empty">
-                      Resumo por loja indisponível nesta consulta.
-                    </td>
-                  </tr>
+                  <tr><td colSpan={4} className="empty">Resumo por loja indisponível nesta consulta.</td></tr>
                 )}
               </tbody>
             </table>
@@ -1088,12 +919,8 @@ export default function App() {
               <p>Clique em uma fatia para filtrar o grupo.</p>
             </div>
           </div>
-          <ReactECharts
-            option={groupOption}
-            notMerge={true}
-            onEvents={{ click: onGroupClick }}
-            style={{ height: 320 }}
-          />
+          <ReactECharts option={groupOption} notMerge={true}
+            onEvents={{ click: onGroupClick }} style={{ height: 320 }} />
         </article>
       </section>
 
@@ -1108,19 +935,10 @@ export default function App() {
           </div>
           <span className="tag">HORÁRIOS</span>
         </div>
-
-        <ReactECharts
-          option={heatmapOption}
-          notMerge={true}
-          onEvents={{ click: onHeatmapClick }}
-          style={{ height: 300 }}
-        />
-
+        <ReactECharts option={heatmapOption} notMerge={true}
+          onEvents={{ click: onHeatmapClick }} style={{ height: 300 }} />
         {filters.weekday !== '' && filters.hour !== '' && (
-          <button
-            className="clear"
-            onClick={() => update({ weekday: '', hour: '' })}
-          >
+          <button className="clear" onClick={() => update({ weekday: '', hour: '' })}>
             Limpar seleção: {weekdayNames[Number(filters.weekday)]} às {String(filters.hour).padStart(2, '0')}h
           </button>
         )}
@@ -1135,12 +953,8 @@ export default function App() {
             </div>
             <span className="tag">VENDAS</span>
           </div>
-
-          <ReactECharts
-            option={dailyOption}
-            onEvents={{ click: onDailyClick }}
-            style={{ height: 300 }}
-          />
+          <ReactECharts option={dailyOption} onEvents={{ click: onDailyClick }}
+            style={{ height: 300 }} />
         </article>
 
         <article className="panel">
@@ -1150,13 +964,8 @@ export default function App() {
               <p>Clique em uma fatia para filtrar.</p>
             </div>
           </div>
-
-          <ReactECharts
-            option={paymentOption}
-            notMerge={true}
-            onEvents={{ click: onPaymentClick }}
-            style={{ height: 340 }}
-          />
+          <ReactECharts option={paymentOption} notMerge={true}
+            onEvents={{ click: onPaymentClick }} style={{ height: 340 }} />
         </article>
       </section>
 
@@ -1170,15 +979,10 @@ export default function App() {
             </p>
           </div>
         </div>
-
         <div className="table-wrap">
           <table>
             <thead>
-              <tr>
-                <th>Forma de pagamento</th>
-                <th>Valor registrado</th>
-                <th>Troco</th>
-              </tr>
+              <tr><th>Forma de pagamento</th><th>Valor registrado</th><th>Troco</th></tr>
             </thead>
             <tbody>
               {[...new Set((data?.payments || []).map(p => p.method))].map(method => {
@@ -1189,205 +993,86 @@ export default function App() {
 
                 return (
                   <Fragment key={method}>
-                    <tr
-                      className="interactive-row"
-                      onClick={() => setExpandedPayment(open ? null : method)}
-                    >
+                    <tr className="interactive-row" onClick={() => setExpandedPayment(open ? null : method)}>
                       <td>{open ? '▾' : '▸'} {method}</td>
-                      <td>{money(total)}</td>
-                      <td>{money(change)}</td>
+                      <td>{money(total)}</td><td>{money(change)}</td>
                     </tr>
-
                     {open && rows.filter(p => p.brand).map((p, i) => (
                       <tr key={`${method}-${p.brand}-${i}`}>
-                        <td style={{ paddingLeft: 32, color: '#9aaca0' }}>
-                          ↳ {p.brand}
-                        </td>
-                        <td>{money(p.amount)}</td>
-                        <td>{money(p.change_amount || 0)}</td>
+                        <td style={{ paddingLeft: 32, color: '#9aaca0' }}>↳ {p.brand}</td>
+                        <td>{money(p.amount)}</td><td>{money(p.change_amount || 0)}</td>
                       </tr>
                     ))}
                   </Fragment>
                 );
               })}
-
               {!(data?.payments || []).length && (
-                <tr>
-                  <td colSpan={3} className="empty">
-                    Nenhum pagamento encontrado.
-                  </td>
-                </tr>
+                <tr><td colSpan={3} className="empty">Nenhum pagamento encontrado.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </section>
 
-      <section className="panel products">
+      <section className="panel products product-list-panel">
         <div className="panel-head">
           <div>
             <h2>Produtos em destaque</h2>
-            <p>Clique em uma barra ou linha para filtrar o produto.</p>
+            <p>Use as setinhas nos títulos para ordenar os produtos.</p>
           </div>
+          <span className="tag">PRODUTOS</span>
         </div>
-
-        <ReactECharts
-          option={productOption}
-          onEvents={{ click: onProductClick }}
-          style={{ height: 280 }}
-        />
-
         <div className="table-wrap">
-          <table>
+          <table className="product-table">
             <thead>
               <tr>
-                <th>Produto</th>
-                <th>Quantidade</th>
-                <th>Faturamento</th>
-                <th>Custo</th>
-                <th>Lucro</th>
-                <th>Markup</th>
-                <th>Markdown</th>
+                {productHeading('Produto', 'product')}
+                {productHeading('Quantidade', 'quantity')}
+                {productHeading('Faturamento', 'revenue')}
+                {productHeading('Custo', 'cost')}
+                {productHeading('Lucro', 'profit')}
+                {productHeading('Markup', 'markup')}
+                {productHeading('Markdown', 'markdown')}
               </tr>
             </thead>
             <tbody>
-              {data?.products.map((p, i) => {
-                const profit = Number(p.revenue) - Number(p.cost);
-                const markup = Number(p.cost)
-                  ? profit / Number(p.cost) * 100
-                  : 0;
-
+              {sortedProducts.map((p, i) => {
+                const revenue = Number(p.revenue || 0);
+                const cost = Number(p.cost || 0);
+                const profit = revenue - cost;
+                const markup = cost > 0 ? profit / cost * 100 : 0;
                 return (
-                  <tr
-                    key={`${p.product}-${i}`}
-                    className="interactive-row"
-                    onClick={() => update({
-                      product: filters.product === p.product ? '' : p.product
-                    })}
-                  >
+                  <tr key={`${p.product}-${i}`}
+                    className={`interactive-row ${filters.product === p.product ? 'selected-product' : ''}`}
+                    onClick={() => update({ product: filters.product === p.product ? '' : p.product })}>
                     <td>{p.product}</td>
                     <td>{number(p.quantity)}</td>
-                    <td>{money(p.revenue)}</td>
-                    <td>{money(p.cost)}</td>
+                    <td>{money(revenue)}</td>
+                    <td>{money(cost)}</td>
                     <td>{money(profit)}</td>
-                    <td>{markup.toFixed(2).replace('.', ',')}%</td>
-                    <td>—</td>
+                    <td>{percent(markup)}</td>
+                    <td>{p.markdown == null ? '—' : percent(Number(p.markdown))}</td>
                   </tr>
                 );
               })}
-
-              {!data?.products.length && (
-                <tr>
-                  <td colSpan={7} className="empty">
-                    Nenhum produto encontrado para os filtros selecionados.
-                  </td>
-                </tr>
+              {!sortedProducts.length && (
+                <tr><td colSpan={7} className="empty">Nenhum produto encontrado para os filtros selecionados.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </section>
 
-      <section className="panel sale-panel">
+      <section className="panel monthly-combined-panel">
         <div className="panel-head">
           <div>
-            <h2>Consultar venda individual</h2>
-            <p>Pesquise diretamente no iServer, sem gravar a venda no BI.</p>
+            <h2>Desempenho mensal comparativo</h2>
+            <p>Faturamento, média diária e markup ao longo dos 12 meses. Passe o mouse sobre a legenda para destacar cada indicador.</p>
           </div>
-          <span className="tag">CUPOM</span>
+          <span className="tag">ANÁLISE ANUAL</span>
         </div>
-
-        <div className="sale-search">
-          <label>
-            Loja
-            <select value={saleStore} onChange={e => setSaleStore(e.target.value)}>
-              <option value="1">Loja 1</option>
-              <option value="2">Loja 2</option>
-              <option value="3">Loja 3</option>
-            </select>
-          </label>
-
-          <label>
-            Data
-            <input
-              type="date"
-              value={saleDate}
-              onChange={e => setSaleDate(e.target.value)}
-            />
-          </label>
-
-          <label className="document-field">
-            Número do cupom
-            <input
-              value={saleDocument}
-              onChange={e => setSaleDocument(e.target.value)}
-              placeholder="Ex.: 001-052902/101126"
-              onKeyDown={e => {
-                if (e.key === 'Enter') void searchSale();
-              }}
-            />
-          </label>
-
-          <button onClick={() => void searchSale()} disabled={saleLoading}>
-            {saleLoading ? 'Consultando...' : 'Consultar venda'}
-          </button>
-        </div>
-
-        {saleError && <div className="error sale-error">{saleError}</div>}
-
-        {saleResult?.sale && (
-          <div className="sale-result">
-            <div className="sale-summary">
-              <div>
-                <small>Loja</small>
-                <strong>{saleResult.sale.storeName}</strong>
-              </div>
-              <div>
-                <small>Cupom</small>
-                <strong>{saleResult.sale.documentId}</strong>
-              </div>
-              <div>
-                <small>Data</small>
-                <strong>
-                  {String(saleResult.sale.issuedAt).slice(0, 19).replace('T', ' ')}
-                </strong>
-              </div>
-              <div>
-                <small>Total</small>
-                <strong>{money(saleResult.sale.total)}</strong>
-              </div>
-            </div>
-
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Produto</th>
-                    <th>Quantidade</th>
-                    <th>Venda</th>
-                    <th>Custo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {saleResult.sale.items.map((x, i) => (
-                    <tr key={i}>
-                      <td>{x.description}</td>
-                      <td>{number(Number(x.quantity))}</td>
-                      <td>{money(x.total)}</td>
-                      <td>{money(x.cost)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <p className="payment-line">
-              Pagamentos: {saleResult.sale.payments.map((p: any) =>
-                `${p.method}${p.brand ? ` (${p.brand})` : ''}: ${money(p.amount)}`
-              ).join(' · ')}
-            </p>
-          </div>
-        )}
+        <ReactECharts option={monthlyCombinedOption} notMerge={true}
+          lazyUpdate={true} style={{ height: 410, width: '100%' }} />
       </section>
 
       <footer>
@@ -1431,30 +1116,14 @@ function Gauge({
   greenStart: number;
   subtitle: string;
 }) {
-  const displayedValue = Math.max(
-    0,
-    Number.isFinite(value) ? value : 0
-  );
-
+  const displayedValue = Math.max(0, Number.isFinite(value) ? value : 0);
   const needleValue = Math.min(max, displayedValue);
-
-  const zone =
-    needleValue < yellowStart
-      ? 'Vermelho'
-      : needleValue < greenStart
-        ? 'Amarelo'
-        : 'Verde';
-
-  const formattedValue =
-    `${displayedValue.toFixed(2).replace('.', ',')}%`;
+  const zone = needleValue < yellowStart ? 'Vermelho' : needleValue < greenStart ? 'Amarelo' : 'Verde';
+  const formattedValue = percent(displayedValue);
 
   const option = {
     animationDuration: 700,
-
-    tooltip: {
-      formatter: `${title}: ${formattedValue}`
-    },
-
+    tooltip: { formatter: `${title}: ${formattedValue}` },
     series: [{
       type: 'gauge',
       min: 0,
@@ -1463,31 +1132,19 @@ function Gauge({
       endAngle: 0,
       center: ['50%', '76%'],
       radius: '100%',
-
       pointer: {
         show: true,
         length: '62%',
         width: 5,
-        itemStyle: {
-          color: '#dce7df'
-        }
+        itemStyle: { color: '#dce7df' }
       },
-
       anchor: {
         show: true,
         showAbove: true,
         size: 9,
-        itemStyle: {
-          color: '#a8dcb6',
-          borderColor: '#17231c',
-          borderWidth: 2
-        }
+        itemStyle: { color: '#a8dcb6', borderColor: '#17231c', borderWidth: 2 }
       },
-
-      progress: {
-        show: false
-      },
-
+      progress: { show: false },
       axisLine: {
         lineStyle: {
           width: 18,
@@ -1498,43 +1155,23 @@ function Gauge({
           ]
         }
       },
-
       axisTick: { show: false },
       splitLine: { show: false },
       axisLabel: { show: false },
       detail: { show: false },
-
-      data: [{
-        value: needleValue
-      }]
+      data: [{ value: needleValue }]
     }]
   };
 
   return (
     <article className="panel gauge-panel">
       <div className="panel-head">
-        <div>
-          <h2>{title}</h2>
-          <p>{subtitle}</p>
-        </div>
+        <div><h2>{title}</h2><p>{subtitle}</p></div>
         <span className="tag">INDICADOR</span>
       </div>
-
-      <ReactECharts
-        option={option}
-        style={{
-          height: 175,
-          marginTop: 4
-        }}
-      />
-
-      <div className="gauge-value">
-        {formattedValue}
-      </div>
-
-      <div className={`gauge-status ${zone.toLowerCase()}`}>
-        Faixa atual: {zone}
-      </div>
+      <ReactECharts option={option} style={{ height: 175, marginTop: 4 }} />
+      <div className="gauge-value">{formattedValue}</div>
+      <div className={`gauge-status ${zone.toLowerCase()}`}>Faixa atual: {zone}</div>
     </article>
   );
 }
