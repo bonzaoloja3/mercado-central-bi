@@ -1,4 +1,3 @@
-
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
@@ -13,7 +12,7 @@ const AGENT_TOKEN = process.env.AGENT_TOKEN || 'troque-por-um-token-forte';
 const CACHE_TTL = Math.max(10, Number(process.env.CACHE_TTL_SECONDS || 300)) * 1000;
 const JOB_TIMEOUT = Math.max(10, Number(process.env.AGENT_JOB_TIMEOUT_SECONDS || 60)) * 1000;
 
-type Filters = { from: string; to: string; store: string; group?: string; product?: string; payment?: string; weekday?: string; hour?: string };
+type Filters = { from: string; to: string; store: string; group?: string; product?: string; payment?: string; weekday?: string; hour?: string; timeFrom?: string; timeTo?: string };
 type Job = { id: string; type: 'dashboard' | 'sale'; filters?: Filters; storeId?: number; documentId?: string; date?: string; createdAt: number };
 type CacheEntry = { expiresAt: number; value: any; updatedAt: string };
 const cache = new Map<string, CacheEntry>();
@@ -27,7 +26,8 @@ function validDate(v: unknown) { return typeof v === 'string' && /^\d{4}-\d{2}-\
 function getFilters(q: any): Filters {
   const from = validDate(q.from) ? q.from : new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
   const to = validDate(q.to) ? q.to : new Date().toISOString().slice(0, 10);
-  return { from, to, store: String(q.store || '0'), group: String(q.group || ''), product: String(q.product || ''), payment: String(q.payment || ''), weekday: q.weekday === undefined || q.weekday === '' ? '' : String(Math.max(0, Math.min(6, Number(q.weekday)))), hour: q.hour === undefined || q.hour === '' ? '' : String(Math.max(0, Math.min(23, Number(q.hour)))) };
+  const validTime = (v: unknown) => typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+  return { from, to, store: String(q.store || '0'), group: String(q.group || ''), product: String(q.product || ''), payment: String(q.payment || ''), weekday: q.weekday === undefined || q.weekday === '' ? '' : String(Math.max(0, Math.min(6, Number(q.weekday)))), hour: q.hour === undefined || q.hour === '' ? '' : String(Math.max(0, Math.min(23, Number(q.hour)))), timeFrom: validTime(q.timeFrom) ? q.timeFrom : '', timeTo: validTime(q.timeTo) ? q.timeTo : '' };
 }
 function cacheKey(type: string, data: unknown) { return `${type}:${JSON.stringify(data)}`; }
 function getCache(key: string) { const v = cache.get(key); if (!v) return null; if (v.expiresAt <= Date.now()) { cache.delete(key); return null; } return v; }
