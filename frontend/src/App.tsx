@@ -1,4 +1,3 @@
-
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 
@@ -192,6 +191,19 @@ const heatmapAllStoresPieces = createHeatmapPieces(10, 200);
 const heatmapSingleStorePieces = createHeatmapPieces(5, 100);
 
 const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+// O backend considera segunda-feira como 0 e domingo como 6.
+const weekdayOrder = [
+  { label: 'Dom', value: 6 },
+  { label: 'Seg', value: 0 },
+  { label: 'Ter', value: 1 },
+  { label: 'Qua', value: 2 },
+  { label: 'Qui', value: 3 },
+  { label: 'Sex', value: 4 },
+  { label: 'Sáb', value: 5 }
+];
+
+const weekdayNames = weekdayOrder.map(day => day.label);
 
 export default function App() {
   const [filters, setFilters] = useState<Filters>(initialFilters);
@@ -673,7 +685,6 @@ export default function App() {
     }
   };
 
-  const weekdayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
   const heatmapHours = Array.from({ length: 14 }, (_, i) =>
     String(i + 7).padStart(2, '0')
   );
@@ -687,9 +698,9 @@ export default function App() {
   );
 
   const heatmapOption = useMemo(() => {
-    const rows = weekdayNames.map((_, weekday) => {
+    const rows = weekdayOrder.map(day => {
       const items = heatmapVisibleData.filter(
-        item => Number(item.weekday) === weekday
+        item => Number(item.weekday) === day.value
       );
 
       return {
@@ -716,7 +727,7 @@ export default function App() {
 
     const regularData = heatmapVisibleData.map(item => [
       String(item.hour).padStart(2, '0'),
-      weekdayNames[Number(item.weekday)],
+      weekdayOrder.find(day => day.value === Number(item.weekday))?.label || '',
       Number(item.coupons),
       Number(item.revenue),
       Number(item.coupons)
@@ -724,7 +735,7 @@ export default function App() {
 
     const rowTotals = rows.map((item, index) => [
       'Total',
-      weekdayNames[index],
+      weekdayOrder[index].label,
       item.coupons,
       item.revenue,
       -1
@@ -792,7 +803,8 @@ export default function App() {
       },
       yAxis: {
         type: 'category',
-        data: [...weekdayNames, 'Total'],
+        inverse: true,
+        data: ['Total', ...weekdayNames],
         axisLabel: {
           color: '#aab8ae',
           fontWeight: 600
@@ -807,7 +819,7 @@ export default function App() {
         bottom: 0,
         show: false,
         pieces: [
-          { value: -1, color: '#26382e' },
+          { value: -1, color: 'transparent' },
           ...heatmapPieces.map(piece => ({ ...piece }))
         ]
       },
@@ -856,9 +868,13 @@ export default function App() {
       v[0] !== 'Total' &&
       v[1] !== 'Total'
     ) {
+      const selectedDay = weekdayOrder.find(day => day.label === v[1]);
+
+      if (!selectedDay) return;
+
       update({
         hour: String(v[0]).replace(/^0/, ''),
-        weekday: String(weekdayNames.indexOf(v[1]))
+        weekday: String(selectedDay.value)
       });
     }
   };
@@ -1057,15 +1073,6 @@ export default function App() {
               <option key={g.code} value={g.code}>{g.name}</option>
             ))}
           </select>
-        </label>
-
-        <label>
-          Produto
-          <input
-            value={filters.product}
-            onChange={e => update({ product: e.target.value })}
-            placeholder="Nome, código ou barras"
-          />
         </label>
 
         <label>
@@ -1270,7 +1277,7 @@ export default function App() {
             className="clear"
             onClick={() => update({ weekday: '', hour: '' })}
           >
-            Limpar seleção: {weekdayNames[Number(filters.weekday)]} às {String(filters.hour).padStart(2, '0')}h
+            Limpar seleção: {weekdayOrder.find(day => day.value === Number(filters.weekday))?.label} às {String(filters.hour).padStart(2, '0')}h
           </button>
         )}
       </section>
