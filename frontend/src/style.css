@@ -1,4 +1,3 @@
-
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
 
 :root {
@@ -9,7 +8,9 @@
   text-rendering: optimizeLegibility;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
@@ -17,15 +18,25 @@ body {
   background: radial-gradient(ellipse at 85% -10%, #203c2c 0, transparent 35%), #101a16;
 }
 
-.shell { max-width: 1440px; margin: auto; padding: 28px 42px 24px; }
+.shell {
+  max-width: 1440px;
+  margin: auto;
+  padding: 28px 42px 24px;
+}
 
-header, .brand, .status, .intro, .filters, .panel-head {
+header,
+.brand,
+.status,
+.intro,
+.panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.brand { gap: 12px; }
+.brand {
+  gap: 12px;
+}
 
 .mark {
   width: 42px;
@@ -52,7 +63,11 @@ header, .brand, .status, .intro, .filters, .panel-head {
   margin-top: 3px;
 }
 
-.status { gap: 9px; color: #aab8ae; font-size: 12px; }
+.status {
+  gap: 9px;
+  color: #aab8ae;
+  font-size: 12px;
+}
 
 .status i {
   width: 7px;
@@ -62,7 +77,9 @@ header, .brand, .status, .intro, .filters, .panel-head {
   box-shadow: 0 0 12px #79c99a;
 }
 
-.intro { margin: 52px 0 26px; }
+.intro {
+  margin: 52px 0 26px;
+}
 
 .eyebrow {
   color: #86c99d;
@@ -78,9 +95,14 @@ header, .brand, .status, .intro, .filters, .panel-head {
   letter-spacing: -1.3px;
 }
 
-.sub { color: #91a197; margin: 8px 0 0; font-size: 14px; }
+.sub {
+  color: #91a197;
+  margin: 8px 0 0;
+  font-size: 14px;
+}
 
-.refresh, .filters button {
+.refresh,
+.filters button {
   border: 1px solid #46634f;
   background: #203a2a;
   color: #dff2e4;
@@ -90,28 +112,42 @@ header, .brand, .status, .intro, .filters, .panel-head {
   cursor: pointer;
 }
 
+/* Filtros em uma única linha no desktop */
 .filters {
-  justify-content: flex-start;
-  gap: 12px;
+  display: grid;
+  grid-template-columns:
+    minmax(105px, 1fr)
+    minmax(105px, 1fr)
+    minmax(110px, .9fr)
+    minmax(120px, 1fr)
+    minmax(120px, 1fr)
+    minmax(115px, .9fr)
+    minmax(115px, .9fr)
+    auto
+    auto;
+  align-items: end;
+  gap: 10px;
   padding: 15px;
   background: #17241d;
   border: 1px solid #283a2f;
   border-radius: 12px;
   margin-bottom: 18px;
-  flex-wrap: wrap;
 }
 
 .filters label {
   display: grid;
   gap: 6px;
+  min-width: 0;
   color: #93a59a;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: .7px;
 }
 
-.filters input, .filters select {
-  min-width: 150px;
+.filters input,
+.filters select {
+  width: 100%;
+  min-width: 0;
   background: #101a16;
   color: #e7f0e9;
   border: 1px solid #35483c;
@@ -120,15 +156,16 @@ header, .brand, .status, .intro, .filters, .panel-head {
   font: 12px 'DM Sans';
 }
 
-.filters input:focus, .filters select:focus {
+.filters input:focus,
+.filters select:focus {
   outline: none;
   border-color: #79c99a;
   box-shadow: 0 0 0 2px rgba(121, 201, 154, .12);
 }
 
-/* Filtros de horário */
 .filters .time-filter input {
-  min-width: 125px;
+  min-width: 0;
+  width: 100%;
   color-scheme: dark;
   cursor: pointer;
 }
@@ -141,12 +178,16 @@ header, .brand, .status, .intro, .filters, .panel-head {
 
 .filters button {
   align-self: end;
+  white-space: nowrap;
   background: #a8dcb6;
   color: #15301e;
   border-color: #a8dcb6;
+  padding: 11px 13px;
 }
 
-.filters button:disabled { opacity: .6; }
+.filters button:disabled {
+  opacity: .6;
+}
 
 .filters .clear {
   background: transparent;
@@ -161,7 +202,8 @@ header, .brand, .status, .intro, .filters, .panel-head {
   margin-bottom: 16px;
 }
 
-.kpi, .panel {
+.kpi,
+.panel {
   background: linear-gradient(145deg, #1b2a21, #17231c);
   border: 1px solid #2b3c31;
   border-radius: 13px;
@@ -172,7 +214,8 @@ header, .brand, .status, .intro, .filters, .panel-head {
   min-width: 0;
 }
 
-.kpi span, .kpi small {
+.kpi span,
+.kpi small {
   display: block;
   color: #9aaca0;
   font-size: 11px;
@@ -187,7 +230,10 @@ header, .brand, .status, .intro, .filters, .panel-head {
   text-overflow: ellipsis;
 }
 
-.kpi small { color: #718579; font-size: 10px; }
+.kpi small {
+  color: #718579;
+  font-size: 10px;
+}
 
 .charts {
   display: grid;
@@ -206,7 +252,10 @@ header, .brand, .status, .intro, .filters, .panel-head {
   gap: 10px;
 }
 
-.panel h2 { font: 700 15px Manrope; margin: 0; }
+.panel h2 {
+  font: 700 15px Manrope;
+  margin: 0;
+}
 
 .panel-head p {
   font-size: 11px;
@@ -225,7 +274,9 @@ header, .brand, .status, .intro, .filters, .panel-head {
   white-space: nowrap;
 }
 
-.products { margin-bottom: 22px; }
+.products {
+  margin-bottom: 22px;
+}
 
 .table-wrap {
   overflow: auto;
@@ -257,7 +308,10 @@ td {
   color: #dce7df;
 }
 
-td:not(:first-child), th:not(:first-child) { text-align: right; }
+td:not(:first-child),
+th:not(:first-child) {
+  text-align: right;
+}
 
 .empty {
   text-align: center !important;
@@ -272,7 +326,9 @@ footer {
   padding: 8px;
 }
 
-footer span { color: #53665a; }
+footer span {
+  color: #53665a;
+}
 
 .error {
   padding: 12px 15px;
@@ -303,9 +359,13 @@ footer span { color: #53665a; }
   align-items: stretch;
 }
 
-.gauge-panel { min-width: 0; }
+.gauge-panel {
+  min-width: 0;
+}
 
-.gauge-panel .panel-head { min-height: 36px; }
+.gauge-panel .panel-head {
+  min-height: 36px;
+}
 
 .gauge-value {
   text-align: center;
@@ -346,16 +406,23 @@ footer span { color: #53665a; }
 }
 
 /* Comparativo entre lojas */
-.store-panel { min-width: 0; }
+.store-panel {
+  min-width: 0;
+}
 
-.store-panel .table-wrap { margin-top: 12px; }
+.store-panel .table-wrap {
+  margin-top: 12px;
+}
 
-.store-panel th, .store-panel td {
+.store-panel th,
+.store-panel td {
   white-space: nowrap;
   padding: 10px 8px;
 }
 
-.monthly-row { grid-template-columns: 1.6fr 1fr; }
+.monthly-row {
+  grid-template-columns: 1.6fr 1fr;
+}
 
 /* Linhas clicáveis */
 .interactive-row {
@@ -368,7 +435,9 @@ footer span { color: #53665a; }
   transform: translateY(-1px);
 }
 
-.interactive-row td { transition: background .18s ease; }
+.interactive-row td {
+  transition: background .18s ease;
+}
 
 .interactive-row:hover td {
   background: rgba(121, 201, 154, .08);
@@ -393,40 +462,61 @@ footer span { color: #53665a; }
 }
 
 /* Gráficos e tabelas */
-.panel.wide, .panel.products { min-width: 0; }
+.panel.wide,
+.panel.products {
+  min-width: 0;
+}
 
 .panel .echarts-for-react {
   max-width: 100%;
   min-width: 0;
 }
 
-.panel canvas { max-width: 100%; }
+.panel canvas {
+  max-width: 100%;
+}
 
-.panel table tr td:first-child { min-width: 150px; }
+.panel table tr td:first-child {
+  min-width: 150px;
+}
 
 /* Transições */
-.kpi, .panel, .refresh, .filters button {
+.kpi,
+.panel,
+.refresh,
+.filters button {
   transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
 }
 
-.kpi:hover, .panel:hover {
+.kpi:hover,
+.panel:hover {
   border-color: #46634f;
   box-shadow: 0 10px 28px rgba(0, 0, 0, .16);
 }
 
-.refresh:hover, .filters button:hover {
+.refresh:hover,
+.filters button:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 18px rgba(121, 201, 154, .14);
 }
 
-.refresh:active, .filters button:active { transform: translateY(0); }
+.refresh:active,
+.filters button:active {
+  transform: translateY(0);
+}
 
 /* Tabela de produtos com ordenação */
-.product-list-panel { margin-bottom: 22px; }
+.product-list-panel {
+  margin-bottom: 22px;
+}
 
-.product-table { min-width: 850px; }
+.product-table {
+  min-width: 850px;
+}
 
-.product-table th { padding: 10px 8px; }
+.product-table th {
+  padding: 10px 8px;
+}
 
 .product-table td {
   padding: 12px 8px;
@@ -455,7 +545,9 @@ footer span { color: #53665a; }
   white-space: nowrap;
 }
 
-.sort-button:hover { color: #dff2e4; }
+.sort-button:hover {
+  color: #dff2e4;
+}
 
 .sort-button span {
   color: #79c99a;
@@ -463,9 +555,13 @@ footer span { color: #53665a; }
   font-weight: 700;
 }
 
-.product-table th:first-child .sort-button { justify-content: flex-start; }
+.product-table th:first-child .sort-button {
+  justify-content: flex-start;
+}
 
-.selected-product td { background: rgba(121, 201, 154, .12); }
+.selected-product td {
+  background: rgba(121, 201, 154, .12);
+}
 
 /* Gráfico combinado anual */
 .monthly-combined-panel {
@@ -478,7 +574,9 @@ footer span { color: #53665a; }
   min-width: 0;
 }
 
-.monthly-combined-panel canvas { max-width: 100%; }
+.monthly-combined-panel canvas {
+  max-width: 100%;
+}
 
 /* Ações do gráfico anual */
 .annual-chart-actions {
@@ -513,32 +611,58 @@ footer span { color: #53665a; }
   box-shadow: inset 0 0 0 1px #46634f;
 }
 
-.chart-type-switch button:hover { color: #fff; }
+.chart-type-switch button:hover {
+  color: #fff;
+}
 
-/* Totais do mapa de calor */
+/* Totais do mapa de calor: texto sem quadradinhos */
 .heatmap-total {
   font-weight: 700;
 }
 
 /* Responsividade */
+@media (max-width: 1250px) {
+  .filters {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .filters button {
+    width: 100%;
+  }
+}
+
 @media (max-width: 1150px) {
-  .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 
-  .gauges { grid-template-columns: 1fr 1fr; }
+  .gauges {
+    grid-template-columns: 1fr 1fr;
+  }
 
-  .store-panel { grid-column: 1 / -1; }
+  .store-panel {
+    grid-column: 1 / -1;
+  }
 
-  .monthly-row { grid-template-columns: 1fr 1fr; }
+  .monthly-row {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 1000px) {
-  .charts { grid-template-columns: 1fr; }
+  .charts {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
-  .shell { padding: 18px 12px 22px; }
+  .shell {
+    padding: 18px 12px 22px;
+  }
 
-  .status { display: none; }
+  .status {
+    display: none;
+  }
 
   .intro {
     margin: 34px 0 20px;
@@ -546,7 +670,9 @@ footer span { color: #53665a; }
     gap: 10px;
   }
 
-  .sub { font-size: 12px; }
+  .sub {
+    font-size: 12px;
+  }
 
   .refresh {
     padding: 9px 11px;
@@ -563,7 +689,8 @@ footer span { color: #53665a; }
     min-width: 0;
   }
 
-  .filters input, .filters select {
+  .filters input,
+  .filters select {
     min-width: 0;
     width: 100%;
   }
@@ -578,36 +705,46 @@ footer span { color: #53665a; }
     width: 100%;
   }
 
-  .filters label:last-of-type {
-    grid-column: auto;
-  }
-
   .filters button {
     grid-column: 1 / -1;
     width: 100%;
   }
 
-  .meta-line { display: grid; }
+  .meta-line {
+    display: grid;
+  }
 
   .kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 9px;
   }
 
-  .kpi { padding: 14px 12px; }
+  .kpi {
+    padding: 14px 12px;
+  }
 
-  .kpi strong { font-size: 18px; }
+  .kpi strong {
+    font-size: 18px;
+  }
 
-  .gauges, .monthly-row, .charts {
+  .gauges,
+  .monthly-row,
+  .charts {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
 
-  .store-panel { grid-column: auto; }
+  .store-panel {
+    grid-column: auto;
+  }
 
-  .gauge-panel { min-height: 275px; }
+  .gauge-panel {
+    min-height: 275px;
+  }
 
-  .gauge-value { font-size: 28px; }
+  .gauge-value {
+    font-size: 28px;
+  }
 
   .panel {
     padding: 13px;
@@ -619,23 +756,37 @@ footer span { color: #53665a; }
     align-items: flex-start;
   }
 
-  .panel-head p { line-height: 1.45; }
+  .panel-head p {
+    line-height: 1.45;
+  }
 
-  .panel .echarts-for-react { width: 100% !important; }
+  .panel .echarts-for-react {
+    width: 100% !important;
+  }
 
-  .store-panel .table-wrap { overflow-x: auto; }
+  .store-panel .table-wrap {
+    overflow-x: auto;
+  }
 
-  .store-panel table { min-width: 620px; }
+  .store-panel table {
+    min-width: 620px;
+  }
 
-  .monthly-combined-panel { padding: 13px 9px; }
+  .monthly-combined-panel {
+    padding: 13px 9px;
+  }
 
   .monthly-combined-panel .echarts-for-react {
     height: 300px !important;
   }
 
-  .product-table { min-width: 850px; }
+  .product-table {
+    min-width: 850px;
+  }
 
-  .annual-chart-actions { gap: 6px; }
+  .annual-chart-actions {
+    gap: 6px;
+  }
 }
 
 @media (max-width: 420px) {
@@ -644,17 +795,29 @@ footer span { color: #53665a; }
     padding-right: 9px;
   }
 
-  .panel { padding: 11px 9px; }
+  .panel {
+    padding: 11px 9px;
+  }
 
-  .panel h2 { font-size: 13px; }
+  .panel h2 {
+    font-size: 13px;
+  }
 
-  .panel-head p { font-size: 10px; }
+  .panel-head p {
+    font-size: 10px;
+  }
 
-  .kpi span { font-size: 10px; }
+  .kpi span {
+    font-size: 10px;
+  }
 
-  .kpi strong { font-size: 16px; }
+  .kpi strong {
+    font-size: 16px;
+  }
 
-  .charts .echarts-for-react { height: 340px !important; }
+  .charts .echarts-for-react {
+    height: 340px !important;
+  }
 
   .monthly-combined-panel .echarts-for-react {
     height: 290px !important;
